@@ -274,13 +274,15 @@ async function getFrame(page, frameName) {
 
   try {
     browser = await puppeteer.launch({
-      headless: HEADLESS_MODE,
+      headless: HEADLESS_MODE ? 'new' : false,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
         '--disable-gpu',
+        '--single-process',
+        '--no-zygote',
         '--window-size=1400,900'
       ]
     });
