@@ -102,6 +102,20 @@ npm run dev
 
 ---
 
+## Instalação em Produção (EasyPanel/Docker)
+
+Para deploy no EasyPanel ou via Docker, consulte a documentação específica:
+
+📁 **[easypanel/README.md](easypanel/README.md)**
+
+Arquivos disponíveis:
+- `easypanel/docker-compose.yml` - Docker Compose completo
+- `easypanel/Dockerfile.backend` - Dockerfile do backend
+- `easypanel/Dockerfile.frontend` - Dockerfile do frontend
+- `easypanel/easypanel.json` - Template para EasyPanel
+
+---
+
 ## Instalação em Produção (Linux)
 
 ### Primeira Instalação

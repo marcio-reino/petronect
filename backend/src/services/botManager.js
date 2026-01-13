@@ -8,6 +8,10 @@ const runningBots = new Map();
 // Diretório base dos bots
 const BOTS_DIR = path.join(__dirname, '../../bots');
 
+// Usar Puppeteer (true) ou Playwright (false)
+const USE_PUPPETEER = process.env.USE_PUPPETEER !== 'false';
+const BOT_SCRIPT = USE_PUPPETEER ? 'bot-runner-puppeteer.js' : 'bot-runner.js';
+
 // Buscar próxima OP da fila de oportunidades específicas
 async function fetchNextOpFromQueue(roboId) {
   try {
@@ -43,9 +47,9 @@ function startBot(robo) {
 
   const bottag = robo.robo_nome.replace(/ /g, '_');
 
-  // Argumentos para o bot-runner.js
+  // Argumentos para o bot-runner
   const args = [
-    path.join(BOTS_DIR, 'bot-runner.js'),
+    path.join(BOTS_DIR, BOT_SCRIPT),
     '--roboId', String(roboId),
     '--login', robo.robo_user,
     '--senha', robo.robo_senha,
