@@ -1,0 +1,444 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-primary-500 via-secondary-500 to-primary-700;
+    @apply min-h-screen;
+    @apply font-sans;
+  }
+
+  /* Dark mode: replace colorful gradient with neutral gray tones */
+  .dark body {
+    @apply bg-[#1a1a1a] text-[#eeeeee];
+  }
+}
+
+@layer components {
+  .glass-effect {
+    @apply bg-white/95 backdrop-blur-lg;
+    @apply shadow-2xl shadow-black/10;
+  }
+
+  /* Dark mode variants for common components */
+  .dark .glass-effect {
+    @apply bg-[#333333]/80 backdrop-blur-sm;
+    @apply shadow-none;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 pl-11 border border-gray-300 rounded-lg;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+    @apply transition-all duration-200;
+  }
+
+  .dark .input-field {
+    @apply bg-[#2a2a2a] border-[#444444] text-[#eeeeee];
+    @apply focus:ring-[#555555];
+  }
+
+  .btn-primary {
+    @apply w-full py-3 px-4 bg-gradient-to-r from-primary-500 to-secondary-500;
+    @apply text-white font-semibold rounded-lg;
+    @apply hover:from-primary-600 hover:to-secondary-600;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+    @apply transform transition-all duration-200;
+    @apply hover:-translate-y-0.5 hover:shadow-lg;
+    @apply active:translate-y-0;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
+  }
+
+  .btn-secondary {
+    @apply py-3 px-4 bg-gray-200 text-gray-700 font-semibold rounded-lg;
+    @apply hover:bg-gray-300 transition-all duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2;
+  }
+
+  .dark .btn-secondary {
+    @apply bg-[#333333] text-[#eeeeee] hover:bg-[#444444] focus:ring-[#555555];
+  }
+}
+
+@layer utilities {
+  .fade-in {
+    animation: fadeIn 0.5s ease-out;
+  }
+
+  .shake {
+    animation: shake 0.5s;
+  }
+
+  /* Ocultar scrollbar mantendo funcionalidade de scroll */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes shake {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-10px);
+    }
+    75% {
+      transform: translateX(10px);
+    }
+  }
+}
+
+/* ========================================
+   MODAL SYSTEM - Padrão para todo o sistema
+   ======================================== */
+
+/* Overlay do Modal */
+.modal-overlay {
+  @apply fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4;
+  animation: modalOverlayIn 0.2s ease-out forwards;
+}
+
+.modal-overlay.closing {
+  animation: modalOverlayOut 0.2s ease-in forwards;
+}
+
+/* Conteúdo do Modal */
+.modal-content {
+  @apply bg-white dark:bg-[#2a2a2a] rounded-lg shadow-xl w-full;
+  animation: modalContentIn 0.25s ease-out forwards;
+}
+
+.modal-content.closing {
+  animation: modalContentOut 0.2s ease-in forwards;
+}
+
+/* Tamanhos do Modal */
+.modal-sm { @apply max-w-sm; }
+.modal-md { @apply max-w-md; }
+.modal-lg { @apply max-w-lg; }
+.modal-xl { @apply max-w-xl; }
+.modal-2xl { @apply max-w-2xl; }
+.modal-3xl { @apply max-w-3xl; }
+.modal-4xl { @apply max-w-4xl; }
+.modal-full { @apply max-w-full mx-4; }
+
+/* Header do Modal */
+.modal-header {
+  @apply flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-[#444444];
+}
+
+.modal-title {
+  @apply text-xl font-bold text-gray-800 dark:text-[#eeeeee];
+}
+
+.modal-close {
+  @apply text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors;
+}
+
+/* Body do Modal */
+.modal-body {
+  @apply p-6;
+}
+
+.modal-body-scroll {
+  @apply p-6 overflow-y-auto;
+  max-height: calc(90vh - 140px);
+  scrollbar-width: thin;
+  scrollbar-color: #14b8a6 transparent;
+}
+
+.modal-body-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-body-scroll::-webkit-scrollbar-thumb {
+  background: #14b8a6;
+  border-radius: 3px;
+}
+
+.modal-body-scroll::-webkit-scrollbar-thumb:hover {
+  background: #0d9488;
+}
+
+/* Scrollbar estilizada com cor primária (teal) */
+.scrollbar-teal {
+  scrollbar-width: thin;
+  scrollbar-color: #14b8a6 transparent;
+}
+
+.scrollbar-teal::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-teal::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.scrollbar-teal::-webkit-scrollbar-thumb {
+  background: #14b8a6;
+  border-radius: 3px;
+}
+
+.scrollbar-teal::-webkit-scrollbar-thumb:hover {
+  background: #0d9488;
+}
+
+.dark .scrollbar-teal {
+  scrollbar-color: #14b8a6 #333333;
+}
+
+.dark .scrollbar-teal::-webkit-scrollbar-track {
+  background: #333333;
+}
+
+/* Scrollbar invisível para calendário */
+.calendar-scroll {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.calendar-scroll::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Footer do Modal */
+.modal-footer {
+  @apply flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-[#444444];
+}
+
+/* Animações de Entrada */
+@keyframes modalOverlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Animações de Saída */
+@keyframes modalOverlayOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modalContentOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+}
+
+/* Classes utilitárias para animação (compatibilidade) */
+.animate-fadeIn {
+  animation: modalOverlayIn 0.2s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fadeInMessage 0.3s ease-out forwards;
+}
+
+@keyframes fadeInMessage {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slideUp {
+  animation: modalContentIn 0.25s ease-out forwards;
+}
+
+.animate-fadeOut {
+  animation: modalOverlayOut 0.2s ease-in forwards;
+}
+
+.animate-slideDown {
+  animation: modalContentOut 0.2s ease-in forwards;
+}
+
+/* React DatePicker Dark Mode Styles */
+.dark-calendar {
+  @apply dark:bg-[#2a2a2a] dark:border-[#444444] rounded-xl shadow-xl;
+}
+
+.react-datepicker {
+  @apply dark:bg-[#2a2a2a] dark:border-[#444444] font-sans;
+  border: 2px solid;
+  font-size: 1rem;
+}
+
+.react-datepicker__header {
+  @apply dark:bg-[#1a1a1a] dark:border-[#444444] rounded-t-xl;
+  border-bottom: 2px solid;
+  padding-top: 1.5rem;
+  padding-bottom: 0.75rem;
+}
+
+.react-datepicker__current-month {
+  @apply dark:text-[#eeeeee] font-bold mb-3;
+  font-size: 1.125rem;
+}
+
+.react-datepicker__day-name {
+  @apply dark:text-[#aaaaaa] font-semibold;
+  width: 2.75rem;
+  line-height: 2.75rem;
+  margin: 0.35rem;
+  font-size: 0.9rem;
+  text-transform: capitalize;
+}
+
+.react-datepicker__day-names {
+  display: flex;
+  justify-content: space-around;
+}
+
+.react-datepicker__day {
+  @apply dark:text-[#dddddd] dark:hover:bg-[#444444] rounded-lg transition-all;
+  margin: 0.35rem;
+  line-height: 2.75rem;
+  width: 2.75rem;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.react-datepicker__day--selected {
+  @apply dark:bg-blue-500 dark:text-white font-bold;
+  transform: scale(1.05);
+}
+
+.react-datepicker__day--keyboard-selected {
+  @apply dark:bg-blue-600 dark:text-white;
+}
+
+.react-datepicker__day--today {
+  @apply dark:bg-[#333333] dark:text-blue-400 font-bold;
+  border: 2px solid #3b82f6;
+}
+
+.react-datepicker__day--disabled {
+  @apply dark:text-[#555555] cursor-not-allowed;
+}
+
+.react-datepicker__navigation {
+  top: 1.5rem;
+  width: 2rem;
+  height: 2rem;
+}
+
+.react-datepicker__navigation-icon::before {
+  @apply dark:border-[#eeeeee];
+  border-width: 2px 2px 0 0;
+  height: 10px;
+  width: 10px;
+}
+
+.react-datepicker__month {
+  @apply dark:bg-[#2a2a2a];
+  margin: 1.25rem;
+}
+
+.react-datepicker__triangle {
+  @apply hidden;
+}
+
+.react-datepicker-popper {
+  z-index: 9999 !important;
+}
+
+.react-datepicker__day--in-range {
+  @apply dark:bg-blue-500/30;
+}
+
+.react-datepicker__day--in-selecting-range {
+  @apply dark:bg-blue-500/20;
+}
+
+.react-datepicker__week {
+  display: flex;
+  justify-content: space-around;
+}
+
+/* Garantir que o input do DatePicker mostre o valor corretamente */
+.react-datepicker-wrapper {
+  display: inline-block;
+}
+
+.react-datepicker__input-container {
+  display: block;
+}
+
+.react-datepicker__input-container input {
+  width: 100% !important;
+  box-sizing: border-box;
+}
+
+/* Editor de Conteúdo Programático */
+.syllabus-editor ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.syllabus-editor ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.syllabus-editor li {
+  margin: 0.25rem 0;
+}
+
+.syllabus-editor ul ul {
+  list-style-type: circle;
+}
+
+.syllabus-editor ul ul ul {
+  list-style-type: square;
+}
