@@ -545,6 +545,13 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
       if (res.data && res.data.success) {
         onStatusChange?.()
 
+        // Resetar estado de verificação para permitir novo modal
+        setVerificationDismissed(false)
+        verificationDismissedRef.current = false
+        setShowVerificationModal(false)
+        showVerificationModalRef.current = false
+        setVerificationCode('')
+
         // Força restart do polling após 1 segundo
         const currentAgente = selectedAgente
         setTimeout(() => {

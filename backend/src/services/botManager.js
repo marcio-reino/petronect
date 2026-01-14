@@ -8,9 +8,8 @@ const runningBots = new Map();
 // Diretório base dos bots
 const BOTS_DIR = path.join(__dirname, '../../bots');
 
-// Usar Puppeteer (true) ou Playwright (false)
-const USE_PUPPETEER = process.env.USE_PUPPETEER !== 'false';
-const BOT_SCRIPT = USE_PUPPETEER ? 'bot-runner-puppeteer.js' : 'bot-runner.js';
+// Sempre usar bot-runner.js que se comunica com o Playwright Service
+const BOT_SCRIPT = 'bot-runner.js';
 
 // Buscar próxima OP da fila de oportunidades específicas
 async function fetchNextOpFromQueue(roboId) {
@@ -148,7 +147,7 @@ function startBot(robo) {
  * @param {number} roboId - ID do robô
  * @returns {Object} - { success, message }
  */
-function stopBot(roboId) {
+async function stopBot(roboId) {
   const botInfo = runningBots.get(roboId);
 
   if (!botInfo) {
@@ -163,15 +162,25 @@ function stopBot(roboId) {
 
     console.log(`[BotManager] Parando bot ${bottag} (PID: ${proc.pid})`);
 
-    // Tentar terminar graciosamente primeiro
-    proc.kill('SIGTERM');
+    // Enviar comando de stop via stdin (funciona em Windows e Linux)
+    proc.stdin.write('STOP\n');
 
-    // Timeout para forçar kill se necessário
-    setTimeout(() => {
-      if (!proc.killed) {
+    // Aguardar um pouco para o bot processar
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Se ainda estiver rodando, forçar kill
+    if (!proc.killed) {
+      console.log(`[BotManager] Forçando encerramento do bot ${bottag}`);
+      if (process.platform === 'win32') {
+        // No Windows, usar taskkill para matar a árvore de processos
+        const { exec } = require('child_process');
+        exec(`taskkill /pid ${proc.pid} /T /F`, (err) => {
+          if (err) console.log(`[BotManager] taskkill: ${err.message}`);
+        });
+      } else {
         proc.kill('SIGKILL');
       }
-    }, 5000);
+    }
 
     runningBots.delete(roboId);
 

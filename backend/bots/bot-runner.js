@@ -1,15 +1,15 @@
 /**
- * Bot Runner - Playwright Bot para Petronect
+ * Bot Runner - Bot para Petronect usando Playwright Service
  *
- * Recebe parametros via linha de comando e se comunica com o backend via API
+ * Recebe parametros via linha de comando e se comunica com:
+ * - Backend API (porta 5000) para logs e status
+ * - Playwright Service (porta 3003) para controle do browser
  *
  * Uso: node bot-runner.js --roboId 1 --login USER --senha PASS --data 1 --bottag OP_01 --ordem 0 [--opresgate 7004192456]
  */
 
-const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
-const pdf = require('pdf-parse');
 
 // =============================================
 // CONFIGURACAO VIA ARGUMENTOS
@@ -31,28 +31,50 @@ const bottag = config.bottag;
 const statusHoraInicioOrdem = config.ordem || '0'; // 0=crescente, 1=decrescente
 const opResgate = config.opresgate || null;
 
-// URL base do backend
+// URLs base
 const API_BASE = process.env.API_BASE || 'http://localhost:5000/api';
+const PLAYWRIGHT_BASE = process.env.PLAYWRIGHT_BASE || 'http://localhost:3003';
 
 // Flag para evitar múltiplas chamadas de stop
 let isStopping = false;
 
-// Modo headless (true = sem interface gráfica, false = com interface gráfica)
-// BOT_HEADLESS=true para produção, BOT_HEADLESS=false para desenvolvimento/debug
-const HEADLESS_MODE = process.env.BOT_HEADLESS === 'true';
+// Listener para comandos via stdin (usado pelo botManager para parar o bot)
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', async (data) => {
+  const command = data.trim();
+  if (command === 'STOP') {
+    console.log(`[Bot] Comando STOP recebido via stdin`);
+    if (!isStopping) {
+      isStopping = true;
+      try {
+        // Fechar browser via Playwright Service
+        if (browserId) {
+          await fetch(`${PLAYWRIGHT_BASE}/browser/${browserId}/close`, { method: 'POST' });
+          console.log(`[Bot] Browser fechado com sucesso`);
+        }
+      } catch (e) {
+        console.error(`[Bot] Erro ao fechar browser:`, e.message);
+      }
+      process.exit(0);
+    }
+  }
+});
 
-// Diretorio de screenshots
-const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots');
+// Modo headless
+const HEADLESS_MODE = process.env.BOT_HEADLESS !== 'false';
+
+// IDs do browser e página
+let browserId = null;
+let pageId = null;
+let pageId2 = null;
 
 // Variaveis globais
-let n_ = '\r\n';
 let n_op_ = '';
 let desc_ = '';
 let data_inicio_ = '';
 let hora_inicio_ = '';
 let data_fim_ = '';
 let hora_fim_ = '';
-let opportunity_type_ = '';
 let qtd_ops = 0;
 let qtd_itens = 0;
 let n_op_processar = '';
@@ -60,6 +82,133 @@ let id_line_process = '';
 let date_op = '';
 let mes_pasta = '';
 let dia_pasta = '';
+
+// =============================================
+// FUNCOES DE COMUNICACAO COM PLAYWRIGHT SERVICE
+// =============================================
+
+async function pw(endpoint, method = 'POST', body = null) {
+  try {
+    const options = {
+      method,
+      headers: { 'Content-Type': 'application/json' }
+    };
+    if (body) {
+      options.body = JSON.stringify(body);
+    }
+    const response = await fetch(`${PLAYWRIGHT_BASE}${endpoint}`, options);
+    return await response.json();
+  } catch (error) {
+    console.error(`[Playwright] Erro em ${endpoint}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Funções de alto nível para Playwright
+async function launchBrowser() {
+  const result = await pw('/browser/launch', 'POST', { headless: HEADLESS_MODE });
+  if (result.success) {
+    browserId = result.browserId;
+  }
+  return result;
+}
+
+async function closeBrowser() {
+  if (!browserId) return { success: true };
+  return await pw(`/browser/${browserId}/close`, 'POST');
+}
+
+async function createPage() {
+  const result = await pw(`/browser/${browserId}/page`, 'POST', { width: 1400, height: 900 });
+  if (result.success) {
+    pageId = result.pageId;
+  }
+  return result;
+}
+
+async function createPage2() {
+  const result = await pw(`/browser/${browserId}/page`, 'POST', { width: 1400, height: 900 });
+  if (result.success) {
+    pageId2 = result.pageId;
+  }
+  return result;
+}
+
+async function goto(url) {
+  return await pw(`/browser/${browserId}/page/${pageId}/goto`, 'POST', { url });
+}
+
+async function click(selector) {
+  return await pw(`/browser/${browserId}/page/${pageId}/click`, 'POST', { selector });
+}
+
+async function fill(selector, value) {
+  return await pw(`/browser/${browserId}/page/${pageId}/fill`, 'POST', { selector, value });
+}
+
+async function press(key) {
+  return await pw(`/browser/${browserId}/page/${pageId}/press`, 'POST', { key });
+}
+
+async function mouseClick(x, y) {
+  return await pw(`/browser/${browserId}/page/${pageId}/mouse-click`, 'POST', { x, y });
+}
+
+async function wait(ms) {
+  return await pw(`/browser/${browserId}/page/${pageId}/wait`, 'POST', { ms });
+}
+
+async function waitSelector(selector, timeout = 30000) {
+  return await pw(`/browser/${browserId}/page/${pageId}/wait-selector`, 'POST', { selector, timeout });
+}
+
+async function isVisible(selector) {
+  const result = await pw(`/browser/${browserId}/page/${pageId}/is-visible`, 'POST', { selector });
+  return result.visible || false;
+}
+
+async function innerText(selector) {
+  const result = await pw(`/browser/${browserId}/page/${pageId}/inner-text`, 'POST', { selector });
+  return result.text || '';
+}
+
+async function getContent() {
+  const result = await pw(`/browser/${browserId}/page/${pageId}/content`, 'POST');
+  return result.content || '';
+}
+
+async function getUrl() {
+  const result = await pw(`/browser/${browserId}/page/${pageId}/url`, 'GET');
+  return result.url || '';
+}
+
+async function screenshot(filename) {
+  return await pw(`/browser/${browserId}/page/${pageId}/screenshot`, 'POST', { filename });
+}
+
+async function frame(name, action, selector, value, options) {
+  return await pw(`/browser/${browserId}/page/${pageId}/frame`, 'POST', {
+    name, action, selector, value, options
+  });
+}
+
+async function locatorFill(selector, value) {
+  return await pw(`/browser/${browserId}/page/${pageId}/locator-fill`, 'POST', { selector, value });
+}
+
+async function locatorClick(selector) {
+  return await pw(`/browser/${browserId}/page/${pageId}/locator-click`, 'POST', { selector });
+}
+
+async function count(selector) {
+  const result = await pw(`/browser/${browserId}/page/${pageId}/count`, 'POST', { selector });
+  return result.count || 0;
+}
+
+async function getPages() {
+  const result = await pw(`/browser/${browserId}/pages`, 'GET');
+  return result.pages || [];
+}
 
 // =============================================
 // FUNCOES DE COMUNICACAO COM BACKEND
@@ -89,12 +238,8 @@ async function UpdateProcesso(opNumero, itemAtual, totalItens, status) {
   }
 }
 
-// Atualizar status do robô no banco de dados (0 = parado)
 async function StopRobo() {
   try {
-    // Buscar token de admin ou usar endpoint interno
-    // Por simplicidade, vamos usar o endpoint de processo com status idle
-    // que já deve ser interpretado como parado
     await fetch(`${API_BASE}/robos/${roboId}/processo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -120,7 +265,6 @@ async function notifyOpCompleted(opNumero) {
   }
 }
 
-// Solicitar código de verificação ao usuário via backend
 async function requestVerificationCode() {
   try {
     await fetch(`${API_BASE}/robos/${roboId}/request-verification`, {
@@ -133,23 +277,9 @@ async function requestVerificationCode() {
   }
 }
 
-// Notificar o backend para parar o agente (quando browser fecha)
-async function notifyBrowserClosed() {
-  if (isStopping) return;
-  isStopping = true;
-
-  console.log(`[Bot ${bottag}] Browser fechado - notificando backend para parar agente...`);
-  await SaveLogBot('Browser fechado - parando agente...');
-  await StopRobo();
-
-  // Encerrar processo
-  process.exit(0);
-}
-
-// Aguardar código de verificação do usuário (polling)
 async function waitForVerificationCode(maxWaitMs = 300000) {
   const startTime = Date.now();
-  const pollInterval = 2000; // Verificar a cada 2 segundos
+  const pollInterval = 2000;
 
   console.log(`[Bot ${bottag}] Aguardando código de verificação (max ${maxWaitMs / 1000}s)...`);
 
@@ -163,7 +293,6 @@ async function waitForVerificationCode(maxWaitMs = 300000) {
         return data.code;
       }
 
-      // Aguardar antes de próxima verificação
       await new Promise(resolve => setTimeout(resolve, pollInterval));
     } catch (error) {
       console.error('[waitForVerificationCode] Erro:', error.message);
@@ -203,10 +332,6 @@ function getHora() {
   return hora + ':' + min + ':' + seg;
 }
 
-function zeroFill(zero, val) {
-  return ('000000' + val).slice(-zero);
-}
-
 function checkFileOP(n_op, id, data) {
   getDayMonthPath(data);
   const url_file = path.join(__dirname, '../../oportunidades', mes_pasta, dia_pasta, n_op + '.txt');
@@ -219,14 +344,7 @@ function checkFileOP(n_op, id, data) {
   }
 }
 
-async function ScreenShot(page, tag) {
-  try {
-    const screenshotPath = path.join(SCREENSHOTS_DIR, `${tag}.png`);
-    await page.screenshot({ path: screenshotPath });
-  } catch (error) {
-    console.error('[ScreenShot] Erro:', error.message);
-  }
-}
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // =============================================
 // START BOT
@@ -241,67 +359,80 @@ async function ScreenShot(page, tag) {
   console.log(`[Bot ${bottag}] Data OP: ${date_op} (${dataOp} dias atras)`);
   console.log(`[Bot ${bottag}] Ordem: ${statusHoraInicioOrdem === '0' ? 'Crescente' : 'Decrescente'}`);
   console.log(`[Bot ${bottag}] OP Resgate: ${opResgate || 'Nenhuma (modo data)'}`);
+  console.log(`[Bot ${bottag}] Playwright Service: ${PLAYWRIGHT_BASE}`);
 
-  let browser;
-  let context;
-  let page;
-
+  // Verificar se o Playwright Service está rodando
   try {
-    browser = await chromium.launch({ headless: HEADLESS_MODE });
-  } catch (err) {
-    console.error(`[Bot ${bottag}] Erro ao iniciar browser:`, err.message);
-    await SaveLogBot('Erro ao iniciar browser - reiniciando em 10s...');
-    await new Promise(resolve => setTimeout(resolve, 10000));
-    process.exit(0); // exit 0 para reiniciar
+    console.log(`[Bot ${bottag}] Tentando conectar em: ${PLAYWRIGHT_BASE}/health`);
+    const healthCheck = await fetch(`${PLAYWRIGHT_BASE}/health`);
+    console.log(`[Bot ${bottag}] Status HTTP: ${healthCheck.status}`);
+    const health = await healthCheck.json();
+    console.log(`[Bot ${bottag}] Resposta health:`, JSON.stringify(health));
+    if (health.status !== 'ok') {
+      throw new Error('Playwright Service não está ok');
+    }
+    console.log(`[Bot ${bottag}] Playwright Service OK`);
+  } catch (error) {
+    console.error(`[Bot ${bottag}] Playwright Service não disponível:`, error.message);
+    console.error(`[Bot ${bottag}] Erro completo:`, error);
+    await SaveLogBot(`Erro: Playwright Service não disponível (${PLAYWRIGHT_BASE}) - ${error.message}`);
+    await delay(10000);
+    process.exit(0);
   }
 
-  // Detectar quando o browser fecha (usuário fechou manualmente ou erro)
-  browser.on('disconnected', () => {
-    notifyBrowserClosed();
-  });
-
   try {
-    context = await browser.newContext();
-    page = await context.newPage();
-  } catch (err) {
-    console.error(`[Bot ${bottag}] Erro ao criar contexto do browser:`, err.message);
-    await SaveLogBot('Erro ao criar contexto do browser - reiniciando em 10s...');
-    isStopping = true;
-    await browser.close();
-    await new Promise(resolve => setTimeout(resolve, 10000));
-    process.exit(0); // exit 0 para reiniciar
-  }
-  await page.setDefaultTimeout(60000);
-  await page.setViewportSize({ width: 1400, height: 900 });
+    // Iniciar browser
+    const launchResult = await launchBrowser();
+    if (!launchResult.success) {
+      throw new Error(`Erro ao iniciar browser: ${launchResult.error}`);
+    }
+    console.log(`[Bot ${bottag}] Browser iniciado (ID: ${browserId})`);
 
-  const pageWebBot = await context.newPage();
-  await pageWebBot.setViewportSize({ width: 1400, height: 900 });
+    // Criar página principal
+    const pageResult = await createPage();
+    if (!pageResult.success) {
+      throw new Error(`Erro ao criar página: ${pageResult.error}`);
+    }
+    console.log(`[Bot ${bottag}] Página criada (ID: ${pageId})`);
 
-  try {
+    // Criar segunda página para PDFs
+    await createPage2();
+
     // Acessar Petronect
-    await page.goto('https://www.petronect.com.br/irj/go/km/docs/pccshrcontent/Site%20Content%20(Legacy)/Portal2018/pt/index.html');
-    await page.click('//html/body/div/div[1]/div[2]/div/div[3]/a');
-    await page.fill('#inputUser', login);
-    await page.fill('#inputSenha', senha);
-    await page.press('body', 'Enter');
+    console.log(`[Bot ${bottag}] Acessando Petronect...`);
+    await SaveLogBot('Acessando Petronect...');
+    await goto('https://www.petronect.com.br/irj/go/km/docs/pccshrcontent/Site%20Content%20(Legacy)/Portal2018/pt/index.html');
+    await wait(2000);
+    await screenshot(bottag);
+    console.log(`[Bot ${bottag}] Página inicial carregada - screenshot salva`);
+    await SaveLogBot('Página inicial carregada');
+
+    await click('//html/body/div/div[1]/div[2]/div/div[3]/a');
+    await wait(1000);
+    await screenshot(bottag);
+    console.log(`[Bot ${bottag}] Tela de login - screenshot salva`);
+
+    await fill('#inputUser', login);
+    await fill('#inputSenha', senha);
+    await press('Enter');
 
     console.log(`[Bot ${bottag}] Efetuando login...`);
     await SaveLogBot('Efetuando login...');
-    await page.waitForTimeout(10000);
-    await ScreenShot(page, bottag);
+    await wait(10000);
+    await screenshot(bottag);
 
-    // Verificar solicitacao de codigo por e-mail
-    const isTextVisible = await page.isVisible('text=Confirme sua identidade');
-    if (isTextVisible) {
-      console.log(`[Bot ${bottag}] Codigo de verificacao solicitado`);
+    // Verificar solicitação de código por e-mail
+    const isCodeVisible = await isVisible('text=Confirme sua identidade');
+    if (isCodeVisible) {
+      console.log(`[Bot ${bottag}] Código de verificação solicitado`);
       await SaveLogBot('Código de verificação solicitado. Aguardando usuário...');
-      await ScreenShot(page, bottag);
-      await page.waitForTimeout(2000);
+      await screenshot(bottag);
+      await wait(2000);
 
       // Clicar no botão para enviar código por email
-      await page.click('//html/body/div[1]/div[2]/div/div/div[2]/div[3]/form/button[2]');
-      await page.waitForTimeout(3000);
-      await ScreenShot(page, bottag);
+      await click('//html/body/div[1]/div[2]/div/div/div[2]/div[3]/form/button[2]');
+      await wait(3000);
+      await screenshot(bottag);
 
       // Solicitar código ao usuário via API
       await requestVerificationCode();
@@ -310,26 +441,25 @@ async function ScreenShot(page, tag) {
       const verificationCode = await waitForVerificationCode(60000);
 
       if (verificationCode) {
-        // Inserir código no campo
         console.log(`[Bot ${bottag}] Inserindo código de verificação...`);
         await SaveLogBot('Inserindo código de verificação...');
 
         // Localizar input do código e inserir
-        const codeInput = await page.locator('input[type="text"], input[type="number"], input[name*="code"], input[id*="code"]').first();
-        if (await codeInput.count() > 0) {
-          await codeInput.fill(verificationCode);
-          await page.waitForTimeout(1000);
+        const codeCount = await count('input[type="text"], input[type="number"], input[name*="code"], input[id*="code"]');
+        if (codeCount > 0) {
+          await locatorFill('input[type="text"], input[type="number"], input[name*="code"], input[id*="code"]', verificationCode.trim());
+          await wait(1000);
 
           // Clicar no botão de confirmar
-          const confirmBtn = await page.locator('button[type="submit"], button:has-text("Confirmar"), button:has-text("Enviar"), button:has-text("Validar")').first();
-          if (await confirmBtn.count() > 0) {
-            await confirmBtn.click();
+          const confirmCount = await count('button[type="submit"], button:has-text("Confirmar"), button:has-text("Enviar"), button:has-text("Validar")');
+          if (confirmCount > 0) {
+            await locatorClick('button[type="submit"], button:has-text("Confirmar"), button:has-text("Enviar"), button:has-text("Validar")');
           } else {
-            await page.press('body', 'Enter');
+            await press('Enter');
           }
 
-          await page.waitForTimeout(5000);
-          await ScreenShot(page, bottag);
+          await wait(5000);
+          await screenshot(bottag);
           await SaveLogBot('Código de verificação enviado!');
         } else {
           console.log(`[Bot ${bottag}] Campo de código não encontrado`);
@@ -338,121 +468,119 @@ async function ScreenShot(page, tag) {
       } else {
         console.log(`[Bot ${bottag}] Timeout - código não recebido`);
         await SaveLogBot('Erro: Timeout aguardando código de verificação - reiniciando em 10s...');
-        isStopping = true; // Evitar que o evento disconnected dispare
-        await browser.close();
-        await new Promise(resolve => setTimeout(resolve, 10000));
-        process.exit(0); // exit 0 para reiniciar
+        isStopping = true;
+        await closeBrowser();
+        await delay(10000);
+        process.exit(0);
       }
     }
 
-    await page.waitForTimeout(8000);
+    await wait(8000);
 
-    // Verificar manutencao de usuario
-    const url = page.url();
+    // Verificar manutenção de usuário
+    const url = await getUrl();
     if (url.indexOf('ypuser_maintenance?origem=2') > -1) {
-      await page.mouse.click(775, 555);
-      await page.waitForTimeout(5000);
+      await mouseClick(775, 555);
+      await wait(5000);
     }
 
-    await page.waitForTimeout(5000);
-    await ScreenShot(page, bottag);
+    await wait(5000);
+    await screenshot(bottag);
 
-    // Acessar Cotacoes
-    const tabIcon1 = await page.locator('#tabIcon1');
-    await tabIcon1.click();
-    console.log(`[Bot ${bottag}] Acessando cotacoes...`);
-    await SaveLogBot('Acessando cotacoes...');
-    await page.waitForTimeout(5000);
-    await ScreenShot(page, bottag);
+    // Acessar Cotações
+    await click('#tabIcon1');
+    console.log(`[Bot ${bottag}] Acessando cotações...`);
+    await SaveLogBot('Acessando cotações...');
+    await wait(5000);
+    await screenshot(bottag);
 
-    // Desbloqueio de sessao
-    console.log(`[Bot ${bottag}] Desbloqueio de sessao...`);
-    await SaveLogBot('Desbloqueio de sessao...');
-    await page.click('#subTabIndex2');
-    await page.waitForTimeout(5000);
+    // Desbloqueio de sessão
+    console.log(`[Bot ${bottag}] Desbloqueio de sessão...`);
+    await SaveLogBot('Desbloqueio de sessão...');
+    await click('#subTabIndex2');
+    await wait(5000);
 
     const xpath_btn_unlocksession = '//html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/div[1]/span[1]/span[2]/div[1]/div[1]/table[1]/tbody[1]/tr[3]/td[1]/div[1]';
-    const isolatedWorkArea = await page.frame({ name: 'isolatedWorkArea' });
-    await isolatedWorkArea.click(xpath_btn_unlocksession);
-    await page.waitForTimeout(5000);
-    await page.mouse.click(863, 520);
+    await frame('isolatedWorkArea', 'click', xpath_btn_unlocksession);
+    await wait(5000);
+    await mouseClick(863, 520);
     await SaveLogBot('Desbloqueio realizado...');
-    await page.waitForTimeout(5000);
+    await wait(5000);
 
-    // Formulario de pesquisa
-    console.log(`[Bot ${bottag}] Acessando formulario de pesquisa...`);
-    await SaveLogBot('Acessando formulario de pesquisa...');
-    await page.click('#subTabIndex1');
-    await page.waitForTimeout(20000);
-    await ScreenShot(page, bottag);
+    // Formulário de pesquisa
+    console.log(`[Bot ${bottag}] Acessando formulário de pesquisa...`);
+    await SaveLogBot('Acessando formulário de pesquisa...');
+    await click('#subTabIndex1');
+    await wait(20000);
+    await screenshot(bottag);
 
-    // XPaths do formulario
+    // XPaths do formulário
     const xpath_input_op = '//html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[3]/td[1]/div[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[2]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/div[1]/div[2]/span[1]/span[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[3]/span[1]/input[1]';
     const xpath_btn_opstatus = '//html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[3]/td[1]/div[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[2]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/div[1]/div[2]/span[1]/span[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[11]/td[3]/span[1]/span[1]';
     const xpath_input_date = '//html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[3]/td[1]/div[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[2]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/div[1]/div[2]/span[1]/span[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[5]/td[3]/span[1]/input[1]';
     const xpath_btn_buscar = '//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[2]/td/table/tbody/tr[3]/td/div[1]/div/table/tbody/tr/td/span/span/table/tbody/tr/td/span/span[2]/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/span[1]/div';
 
-    const page2 = await page.frame({ name: 'isolatedWorkArea' });
-
     // Determinar tipo de pesquisa
     if (opResgate) {
-      // Pesquisa por numero da OP
-      console.log(`[Bot ${bottag}] Pesquisando OP especifica: ${opResgate}`);
-      await SaveLogBot(`Pesquisando OP especifica: ${opResgate}`);
-      await page.waitForTimeout(2000);
-      await page2.click(xpath_btn_opstatus);
-      await page.press('body', 'PageUp');
-      await page.waitForTimeout(1000);
-      await page.press('body', 'PageUp');
-      await page.waitForTimeout(2000);
-      await page2.fill(xpath_input_op, opResgate);
-      await page2.click(xpath_btn_buscar);
+      console.log(`[Bot ${bottag}] Pesquisando OP específica: ${opResgate}`);
+      await SaveLogBot(`Pesquisando OP específica: ${opResgate}`);
+      await wait(2000);
+      await frame('isolatedWorkArea', 'click', xpath_btn_opstatus);
+      await press('PageUp');
+      await wait(1000);
+      await press('PageUp');
+      await wait(2000);
+      await frame('isolatedWorkArea', 'fill', xpath_input_op, opResgate);
+      await frame('isolatedWorkArea', 'click', xpath_btn_buscar);
       n_op_processar = opResgate;
       id_line_process = 2;
     } else {
-      // Pesquisa por data
       console.log(`[Bot ${bottag}] Pesquisando por data: ${date_op}`);
       await SaveLogBot(`Pesquisando por data: ${date_op}`);
-      await page2.fill(xpath_input_date, date_op);
-      await page.waitForTimeout(2000);
-      await page2.click(xpath_btn_buscar);
+      await frame('isolatedWorkArea', 'fill', xpath_input_date, date_op);
+      await wait(2000);
+      await frame('isolatedWorkArea', 'click', xpath_btn_buscar);
     }
 
     console.log(`[Bot ${bottag}] Pesquisando...`);
     await SaveLogBot('Pesquisando...');
-    await page.waitForTimeout(30000);
-    await ScreenShot(page, bottag);
+    await wait(30000);
+    await screenshot(bottag);
 
-    // Ordenacao por hora inicio (se modo data e ordem crescente)
+    // Ordenação por hora início (se modo data e ordem crescente)
     if (statusHoraInicioOrdem === '0' && !opResgate) {
-      const html = await page2.content();
+      const frameContent = await frame('isolatedWorkArea', 'content');
+      const html = frameContent.result || '';
       const posicaoInicial = html.indexOf('Hora In');
-      const idBotao = html.substr(posicaoInicial - 64, 4);
-      await page2.click('#' + idBotao);
-      await page.waitForTimeout(4000);
-      await page2.click(':nth-match(:text("Ordenar em ordem crescente"), 1)');
-      await page.waitForTimeout(10000);
-      await ScreenShot(page, bottag);
-      console.log(`[Bot ${bottag}] Ordenando hora inicio para crescente...`);
-      await SaveLogBot('Ordenando hora inicio para crescente...');
+      if (posicaoInicial > -1) {
+        const idBotao = html.substr(posicaoInicial - 64, 4);
+        await frame('isolatedWorkArea', 'click', '#' + idBotao);
+        await wait(4000);
+        await frame('isolatedWorkArea', 'click', ':nth-match(:text("Ordenar em ordem crescente"), 1)');
+        await wait(10000);
+        await screenshot(bottag);
+        console.log(`[Bot ${bottag}] Ordenando hora início para crescente...`);
+        await SaveLogBot('Ordenando hora início para crescente...');
+      }
     }
 
     // Verificar total de OPs
     const xpath_qtd_ops = '//html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[1]/td[2]/div[1]/div[1]/div[1]';
-    await page2.waitForSelector(xpath_qtd_ops);
-    let qtdElement = await page2.$(xpath_qtd_ops);
-    qtd_ops = await qtdElement.innerText();
+
+    await frame('isolatedWorkArea', 'waitForSelector', xpath_qtd_ops);
+    let qtdResult = await frame('isolatedWorkArea', 'innerText', xpath_qtd_ops);
+    qtd_ops = qtdResult.result || '';
 
     if (qtd_ops.indexOf('[Opera') > -1) {
       console.log(`[Bot ${bottag}] Aguardando +60 segundos...`);
-      await page.waitForTimeout(60000);
-      await ScreenShot(page, bottag);
-      qtdElement = await page2.$(xpath_qtd_ops);
-      qtd_ops = await qtdElement.innerText();
+      await wait(60000);
+      await screenshot(bottag);
+      qtdResult = await frame('isolatedWorkArea', 'innerText', xpath_qtd_ops);
+      qtd_ops = qtdResult.result || '';
     }
 
     qtd_ops = qtd_ops.replace('Minhas Participações (', '').replace(')', '');
-    await page.waitForTimeout(5000);
+    await wait(5000);
     console.log(`[Bot ${bottag}] Total de [${qtd_ops}] oportunidades...`);
     await SaveLogBot(`Total de [${qtd_ops}] oportunidades...`);
     await UpdateProcesso(opResgate || 'DATA', 0, parseInt(qtd_ops), 'running');
@@ -468,11 +596,12 @@ async function ScreenShot(page, tag) {
         const xpath_datainicio = `//html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[3]/td[1]/div[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[4]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[1]/div[1]/div[1]/div[1]/span[1]/span[1]/table[1]/tbody[1]/tr[2]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[${id_line}]/td[4]/span[1]/span[1]`;
 
         try {
-          await page2.waitForSelector(xpath_n_op, { timeout: 5000 });
-          const nOpEl = await page2.$(xpath_n_op);
-          const dataInicioEl = await page2.$(xpath_datainicio);
-          const n_op = await nOpEl.innerText();
-          const data_inicio = await dataInicioEl.innerText();
+          await frame('isolatedWorkArea', 'waitForSelector', xpath_n_op, null, { timeout: 5000 });
+          const nOpResult = await frame('isolatedWorkArea', 'innerText', xpath_n_op);
+          const dataInicioResult = await frame('isolatedWorkArea', 'innerText', xpath_datainicio);
+
+          const n_op = nOpResult.result || '';
+          const data_inicio = dataInicioResult.result || '';
 
           const status = checkFileOP(n_op, id_line, data_inicio);
           console.log(`[Bot ${bottag}] OP: ${n_op}${status}`);
@@ -480,11 +609,11 @@ async function ScreenShot(page, tag) {
         } catch (e) {
           break;
         }
-        await page.waitForTimeout(1000);
+        await wait(1000);
       }
     }
 
-    // Se ha OP para processar
+    // Se há OP para processar
     if (id_line_process && n_op_processar) {
       console.log(`[Bot ${bottag}] Processando OP: ${n_op_processar} Linha: ${id_line_process}`);
       await SaveLogBot(`Processando OP: ${n_op_processar}`);
@@ -499,76 +628,56 @@ async function ScreenShot(page, tag) {
       const xpath_horafim = `//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[2]/td/table/tbody/tr[3]/td/div[1]/div/table/tbody/tr/td/span/span/table/tbody/tr/td/span/span[4]/table/tbody/tr/td/span/span[1]/div/div/div/span/span/table/tbody/tr[2]/td/div/table/tbody/tr/td/div/table/tbody/tr/td[1]/table/tbody/tr[${id_line_process}]/td[7]/span/span`;
 
       try {
-        await page2.waitForSelector(xpath_n_op, { timeout: 10000 });
-        const nOpEl = await page2.$(xpath_n_op);
-        const descEl = await page2.$(xpath_desc_op);
-        const dataInicioEl = await page2.$(xpath_datainicio);
-        const horaInicioEl = await page2.$(xpath_horainicio);
-        const dataFimEl = await page2.$(xpath_datafim);
-        const horaFimEl = await page2.$(xpath_horafim);
+        await frame('isolatedWorkArea', 'waitForSelector', xpath_n_op, null, { timeout: 10000 });
 
-        n_op_ = await nOpEl.innerText();
-        desc_ = await descEl.innerText();
-        data_inicio_ = await dataInicioEl.innerText();
-        hora_inicio_ = await horaInicioEl.innerText();
-        data_fim_ = await dataFimEl.innerText();
-        hora_fim_ = await horaFimEl.innerText();
+        const nOpResult = await frame('isolatedWorkArea', 'innerText', xpath_n_op);
+        const descResult = await frame('isolatedWorkArea', 'innerText', xpath_desc_op);
+        const dataInicioResult = await frame('isolatedWorkArea', 'innerText', xpath_datainicio);
+        const horaInicioResult = await frame('isolatedWorkArea', 'innerText', xpath_horainicio);
+        const dataFimResult = await frame('isolatedWorkArea', 'innerText', xpath_datafim);
+        const horaFimResult = await frame('isolatedWorkArea', 'innerText', xpath_horafim);
 
-        await page2.click(xpath_n_op);
-        await ScreenShot(page, bottag);
+        n_op_ = nOpResult.result || '';
+        desc_ = descResult.result || '';
+        data_inicio_ = dataInicioResult.result || '';
+        hora_inicio_ = horaInicioResult.result || '';
+        data_fim_ = dataFimResult.result || '';
+        hora_fim_ = horaFimResult.result || '';
+
+        await frame('isolatedWorkArea', 'click', xpath_n_op);
+        await screenshot(bottag);
       } catch (e) {
         console.error(`[Bot ${bottag}] Erro ao obter dados da OP:`, e.message);
       }
 
-      await page.waitForTimeout(30000);
+      await wait(30000);
 
       // Acessar itens
-      const page3 = await page.frame({ name: 'isolatedWorkArea' });
       console.log(`[Bot ${bottag}] Acessando itens...`);
       await SaveLogBot('Acessando itens...');
-      await ScreenShot(page, bottag);
-      await page.waitForTimeout(4000);
+      await screenshot(bottag);
+      await wait(4000);
 
       const xpath_btn_itens = '//html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[2]/td[1]/div[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/span[2]/span[2]';
-      await page3.waitForSelector(xpath_btn_itens);
+      await frame('isolatedWorkArea', 'waitForSelector', xpath_btn_itens);
 
-      // Baixar PDF da oportunidade
+      // Baixar PDF
       const xpath_btn_oppdf = '//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[1]/td/div/div[2]/div/div/div[1]/span[5]/div';
-      await page3.click(xpath_btn_oppdf);
-      await page.waitForTimeout(20000);
+      await frame('isolatedWorkArea', 'click', xpath_btn_oppdf);
+      await wait(20000);
 
-      const pages = context.pages();
-      const pageWebBotPdf = pages[2];
-      const pdfUrl = pageWebBotPdf.url();
-      await page.waitForTimeout(2000);
-      await pageWebBot.goto(pdfUrl);
-      await page.waitForTimeout(4000);
-
-      const pdfPath = path.join(__dirname, `${bottag}.pdf`);
-      pageWebBot.on('download', async (download) => {
-        await download.saveAs(pdfPath);
-        console.log(`[Bot ${bottag}] Download de oportunidade concluido!`);
-      });
-      await pageWebBot.click('//html/body/table/tbody/tr/td/div/div[1]/div/table/tbody/tr[3]/td/div/div/table/tbody/tr/td[2]/div');
-      await page.waitForTimeout(5000);
-
-      let textPdf;
-      try {
-        textPdf = fs.readFileSync(pdfPath);
-      } catch (e) {
-        console.log(`[Bot ${bottag}] PDF nao disponivel`);
-      }
-
-      await ScreenShot(page, bottag);
-      await page3.click(xpath_btn_itens);
-      await page.waitForTimeout(20000);
-
-      const page4 = await page.frame({ name: 'isolatedWorkArea' });
+      await screenshot(bottag);
+      await frame('isolatedWorkArea', 'click', xpath_btn_itens);
+      await wait(20000);
 
       // Contar itens
-      const html_itens = await page4.content();
+      const frameContent = await frame('isolatedWorkArea', 'content');
+      const html_itens = frameContent.result || '';
       const html_start = html_itens.indexOf("'ROW',");
-      qtd_itens = parseInt(html_itens.substr(html_start + 9, 2).replace('}', ''));
+      if (html_start > -1) {
+        qtd_itens = parseInt(html_itens.substr(html_start + 9, 2).replace('}', ''));
+      }
+
       console.log(`[Bot ${bottag}] Total de [${qtd_itens}] itens...`);
       await SaveLogBot(`Total de [${qtd_itens}] itens...`);
       await UpdateProcesso(n_op_processar, 0, qtd_itens, 'running');
@@ -583,25 +692,24 @@ async function ScreenShot(page, tag) {
         const xpath_desc_item = `//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[1]/td/div/div/table/tbody/tr[2]/td/div/div/div/div/table/tbody/tr[4]/td/table/tbody/tr/td[1]/table/tbody/tr[${id_item}]/td[6]/a/span`;
 
         try {
-          if (await page4.locator(xpath_id_item).count() > 0) {
-            await page4.waitForSelector(xpath_id_item, { timeout: 10000 });
-            const itemIdEl = await page4.$(xpath_id_item);
-            const itemDescEl = await page4.$(xpath_desc_item);
+          await frame('isolatedWorkArea', 'waitForSelector', xpath_id_item, null, { timeout: 10000 });
 
-            const item_id = await itemIdEl.innerText();
-            const item_desc = await itemDescEl.innerText();
+          const itemIdResult = await frame('isolatedWorkArea', 'innerText', xpath_id_item);
+          const itemDescResult = await frame('isolatedWorkArea', 'innerText', xpath_desc_item);
 
-            console.log(`[Bot ${bottag}] Resgatando item: [${item_id} de ${qtd_itens}] - ${item_desc.substr(0, 50)}...`);
-            await SaveLogBot(`Resgatando item: [${item_id}] - ${item_desc.substr(0, 100)}`);
-            await UpdateProcesso(n_op_processar, parseInt(item_id), qtd_itens, 'running');
-            await ScreenShot(page, bottag);
-          }
+          const item_id = itemIdResult.result || '';
+          const item_desc = itemDescResult.result || '';
+
+          console.log(`[Bot ${bottag}] Resgatando item: [${item_id} de ${qtd_itens}] - ${item_desc.substr(0, 50)}...`);
+          await SaveLogBot(`Resgatando item: [${item_id}] - ${item_desc.substr(0, 100)}`);
+          await UpdateProcesso(n_op_processar, parseInt(item_id), qtd_itens, 'running');
+          await screenshot(bottag);
         } catch (e) {
           console.log(`[Bot ${bottag}] Erro ao processar item ${itemNum}:`, e.message);
         }
 
         id_item += 1;
-        await page.waitForTimeout(3000);
+        await wait(3000);
       }
 
       // Finalizar OP
@@ -629,13 +737,12 @@ async function ScreenShot(page, tag) {
 
       fs.writeFileSync(url_op, opContent);
 
-      // Notificar conclusao (se era OP especifica)
+      // Notificar conclusão
       if (opResgate) {
         const nextOp = await notifyOpCompleted(opResgate);
         if (nextOp) {
-          console.log(`[Bot ${bottag}] Proxima OP da fila: ${nextOp}`);
-          await SaveLogBot(`Proxima OP da fila: ${nextOp}`);
-          // Aqui poderia reiniciar o bot com a proxima OP
+          console.log(`[Bot ${bottag}] Próxima OP da fila: ${nextOp}`);
+          await SaveLogBot(`Próxima OP da fila: ${nextOp}`);
         } else {
           console.log(`[Bot ${bottag}] Fila vazia, operando por data`);
           await SaveLogBot('Fila vazia, operando por data');
@@ -652,20 +759,48 @@ async function ScreenShot(page, tag) {
     // Reiniciar bot
     console.log(`[Bot ${bottag}] Reiniciando...`);
     await SaveLogBot('Reiniciando bot...');
-    isStopping = true; // Evitar que o evento disconnected dispare
-    await browser.close();
+    isStopping = true;
+    await closeBrowser();
     process.exit(0);
 
   } catch (err) {
     console.error(`[Bot ${bottag}] Erro no sistema:`, err.message);
     await SaveLogBot('Erro no sistema, um requisito não foi atendido - reiniciando em 10s...');
-    isStopping = true; // Evitar que o evento disconnected dispare
+    isStopping = true;
     try {
-      await browser.close();
+      await closeBrowser();
     } catch (e) {
       // Browser pode já estar fechado
     }
-    await new Promise(resolve => setTimeout(resolve, 10000));
-    process.exit(0); // exit 0 para reiniciar
+    await delay(10000);
+    process.exit(0);
   }
 })();
+
+// =============================================
+// HANDLERS PARA ENCERRAMENTO GRACIOSO
+// =============================================
+
+async function gracefulShutdown(signal) {
+  console.log(`\n[Bot ${bottag}] Recebido ${signal}, encerrando...`);
+
+  if (isStopping) {
+    console.log(`[Bot ${bottag}] Já está encerrando, ignorando...`);
+    return;
+  }
+
+  isStopping = true;
+
+  try {
+    await SaveLogBot(`Bot encerrado (${signal})`);
+    await closeBrowser();
+    console.log(`[Bot ${bottag}] Browser fechado com sucesso`);
+  } catch (error) {
+    console.error(`[Bot ${bottag}] Erro ao fechar browser:`, error.message);
+  }
+
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
