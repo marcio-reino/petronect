@@ -2,14 +2,11 @@
  * Bot Runner - Bot para Petronect usando Playwright Service
  *
  * Recebe parametros via linha de comando e se comunica com:
- * - Backend API (porta 5000) para logs e status
+ * - Backend API (porta 5000) para logs, status e sincronização de oportunidades
  * - Playwright Service (porta 3003) para controle do browser
  *
  * Uso: node bot-runner.js --roboId 1 --login USER --senha PASS --data 1 --bottag OP_01 --ordem 0 [--opresgate 7004192456]
  */
-
-const fs = require('fs');
-const path = require('path');
 
 // =============================================
 // CONFIGURACAO VIA ARGUMENTOS
@@ -80,8 +77,6 @@ let qtd_itens = 0;
 let n_op_processar = '';
 let id_line_process = '';
 let date_op = '';
-let mes_pasta = '';
-let dia_pasta = '';
 
 // =============================================
 // FUNCOES DE COMUNICACAO COM PLAYWRIGHT SERVICE
@@ -305,6 +300,87 @@ async function waitForVerificationCode(maxWaitMs = 300000) {
 }
 
 // =============================================
+// FUNCOES DE SINCRONIZACAO COM BANCO DE DADOS
+// =============================================
+
+async function syncOportunidade(numero, descricao, datainicio, datafim, totalitens) {
+  try {
+    const response = await fetch(`${API_BASE}/oportunidades/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        numero,
+        descricao,
+        datainicio,
+        datafim,
+        totalitens,
+        bottag
+      })
+    });
+    const data = await response.json();
+    if (data.success) {
+      console.log(`[Bot ${bottag}] OP ${numero} sincronizada no banco`);
+    }
+    return data;
+  } catch (error) {
+    console.error('[syncOportunidade] Erro:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+async function syncItem(opNumero, itemNumero, descricao, quantidade, unidade) {
+  try {
+    const response = await fetch(`${API_BASE}/oportunidades/sync-item`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        opNumero,
+        itemNumero,
+        descricao,
+        quantidade,
+        unidade,
+        bottag
+      })
+    });
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('[syncItem] Erro:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+async function finishOportunidade(numero) {
+  try {
+    const response = await fetch(`${API_BASE}/oportunidades/finish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ numero })
+    });
+    const data = await response.json();
+    if (data.success) {
+      console.log(`[Bot ${bottag}] OP ${numero} finalizada no banco`);
+    }
+    return data;
+  } catch (error) {
+    console.error('[finishOportunidade] Erro:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+async function checkOpInDatabase(opNumero) {
+  try {
+    // Verificar se a OP já está completa no banco (status = 1)
+    const response = await fetch(`${API_BASE}/oportunidades?numero=${opNumero}&status=1&limit=1`);
+    const data = await response.json();
+    return data.success && data.data && data.data.length > 0;
+  } catch (error) {
+    console.error('[checkOpInDatabase] Erro:', error.message);
+    return false;
+  }
+}
+
+// =============================================
 // FUNCOES DE SISTEMA
 // =============================================
 
@@ -319,11 +395,6 @@ function dateGetOp(dt) {
   return dia + '.' + mes + '.' + ano;
 }
 
-function getDayMonthPath(data) {
-  mes_pasta = data.substr(3, 10).replace('.', '-');
-  dia_pasta = data.replace('.', '-').replace('.', '-');
-}
-
 function getHora() {
   const data = new Date();
   const hora = data.getHours();
@@ -332,10 +403,23 @@ function getHora() {
   return hora + ':' + min + ':' + seg;
 }
 
-function checkFileOP(n_op, id, data) {
-  getDayMonthPath(data);
-  const url_file = path.join(__dirname, '../../oportunidades', mes_pasta, dia_pasta, n_op + '.txt');
-  if (!fs.existsSync(url_file)) {
+// Cache de OPs já verificadas no banco
+const opStatusCache = new Map();
+
+async function checkOpStatus(n_op, id) {
+  // Verificar cache primeiro
+  if (opStatusCache.has(n_op)) {
+    const cached = opStatusCache.get(n_op);
+    if (cached) {
+      return ' - Baixado - Linha: ' + id;
+    }
+  }
+
+  // Verificar no banco de dados
+  const isComplete = await checkOpInDatabase(n_op);
+  opStatusCache.set(n_op, isComplete);
+
+  if (!isComplete) {
     id_line_process = id;
     n_op_processar = n_op;
     return ' - Pendente - Linha: ' + id;
@@ -593,17 +677,13 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
       for (let i = 0; i < dez_ops; i++) {
         id_line += 1;
         const xpath_n_op = `//html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[3]/td[1]/div[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[4]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[1]/div[1]/div[1]/div[1]/span[1]/span[1]/table[1]/tbody[1]/tr[2]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[${id_line}]/td[2]/a[1]/span[1]`;
-        const xpath_datainicio = `//html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[2]/td[1]/table[1]/tbody[1]/tr[3]/td[1]/div[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[1]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[4]/table[1]/tbody[1]/tr[1]/td[1]/span[1]/span[1]/div[1]/div[1]/div[1]/span[1]/span[1]/table[1]/tbody[1]/tr[2]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/div[1]/table[1]/tbody[1]/tr[1]/td[1]/table[1]/tbody[1]/tr[${id_line}]/td[4]/span[1]/span[1]`;
 
         try {
           await frame('isolatedWorkArea', 'waitForSelector', xpath_n_op, null, { timeout: 5000 });
           const nOpResult = await frame('isolatedWorkArea', 'innerText', xpath_n_op);
-          const dataInicioResult = await frame('isolatedWorkArea', 'innerText', xpath_datainicio);
-
           const n_op = nOpResult.result || '';
-          const data_inicio = dataInicioResult.result || '';
 
-          const status = checkFileOP(n_op, id_line, data_inicio);
+          const status = await checkOpStatus(n_op, id_line);
           console.log(`[Bot ${bottag}] OP: ${n_op}${status}`);
           await SaveLogBot(`OP: ${n_op}${status}`);
         } catch (e) {
@@ -682,60 +762,53 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
       await SaveLogBot(`Total de [${qtd_itens}] itens...`);
       await UpdateProcesso(n_op_processar, 0, qtd_itens, 'running');
 
+      // Sincronizar oportunidade no banco de dados
+      await syncOportunidade(n_op_, desc_, data_inicio_, data_fim_, qtd_itens);
+
       // Processar itens
       let id_item = 2;
       const dez_itens = Math.min(10, qtd_itens);
 
       for (let i = 0; i < dez_itens; i++) {
-        const itemNum = i + 1;
         const xpath_id_item = `//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[1]/td/div/div/table/tbody/tr[2]/td/div/div/div/div/table/tbody/tr[4]/td/table/tbody/tr/td[1]/table/tbody/tr[${id_item}]/td[2]/table/tbody/tr/td[3]/a/span`;
         const xpath_desc_item = `//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[1]/td/div/div/table/tbody/tr[2]/td/div/div/div/div/table/tbody/tr[4]/td/table/tbody/tr/td[1]/table/tbody/tr[${id_item}]/td[6]/a/span`;
+        const xpath_qtd_item = `//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[1]/td/div/div/table/tbody/tr[2]/td/div/div/div/div/table/tbody/tr[4]/td/table/tbody/tr/td[1]/table/tbody/tr[${id_item}]/td[4]/span/span`;
+        const xpath_unidade_item = `//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[1]/td/div/div/table/tbody/tr[2]/td/div/div/div/div/table/tbody/tr[4]/td/table/tbody/tr/td[1]/table/tbody/tr[${id_item}]/td[5]/span/span`;
 
         try {
           await frame('isolatedWorkArea', 'waitForSelector', xpath_id_item, null, { timeout: 10000 });
 
           const itemIdResult = await frame('isolatedWorkArea', 'innerText', xpath_id_item);
           const itemDescResult = await frame('isolatedWorkArea', 'innerText', xpath_desc_item);
+          const itemQtdResult = await frame('isolatedWorkArea', 'innerText', xpath_qtd_item);
+          const itemUnidadeResult = await frame('isolatedWorkArea', 'innerText', xpath_unidade_item);
 
           const item_id = itemIdResult.result || '';
           const item_desc = itemDescResult.result || '';
+          const item_qtd = itemQtdResult.result || '';
+          const item_unidade = itemUnidadeResult.result || '';
 
           console.log(`[Bot ${bottag}] Resgatando item: [${item_id} de ${qtd_itens}] - ${item_desc.substr(0, 50)}...`);
           await SaveLogBot(`Resgatando item: [${item_id}] - ${item_desc.substr(0, 100)}`);
           await UpdateProcesso(n_op_processar, parseInt(item_id), qtd_itens, 'running');
+
+          // Sincronizar item no banco de dados
+          await syncItem(n_op_, item_id, item_desc, item_qtd, item_unidade);
+
           await screenshot(bottag);
         } catch (e) {
-          console.log(`[Bot ${bottag}] Erro ao processar item ${itemNum}:`, e.message);
+          console.log(`[Bot ${bottag}] Erro ao processar item ${i + 1}:`, e.message);
         }
 
         id_item += 1;
         await wait(3000);
       }
 
-      // Finalizar OP
+      // Finalizar OP no banco de dados
       console.log(`[Bot ${bottag}] Finalizando OP ${n_op_processar}...`);
       await SaveLogBot(`Finalizando OP ${n_op_processar}...`);
       await UpdateProcesso(n_op_processar, qtd_itens, qtd_itens, 'completed');
-
-      // Salvar arquivo da OP
-      getDayMonthPath(data_inicio_);
-      const url_ = path.join(__dirname, '../../oportunidades', mes_pasta, dia_pasta);
-      const url_op = path.join(url_, n_op_ + '.txt');
-
-      if (!fs.existsSync(url_)) {
-        fs.mkdirSync(url_, { recursive: true });
-      }
-
-      let opContent = '#####################################################################################\r\n';
-      opContent += 'OPORTUNIDADE N:    ' + n_op_ + '\r\n';
-      opContent += 'DESCRICAO:         ' + desc_ + '\r\n';
-      opContent += 'DATA INICIO:       ' + data_inicio_ + ' ' + hora_inicio_ + '\r\n';
-      opContent += 'DATA FIM:          ' + data_fim_ + ' ' + hora_fim_ + '\r\n';
-      opContent += '#####################################################################################\r\n';
-      opContent += 'PROCESSADO EM:     ' + dateGetOp(0) + ' - ' + getHora() + ' - ' + bottag + '\r\n';
-      opContent += '######################################## FIM ########################################\r\n';
-
-      fs.writeFileSync(url_op, opContent);
+      await finishOportunidade(n_op_);
 
       // Notificar conclusão
       if (opResgate) {

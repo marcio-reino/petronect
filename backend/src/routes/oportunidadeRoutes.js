@@ -3,7 +3,12 @@ const router = express.Router();
 const oportunidadeController = require('../controllers/oportunidadeController');
 const { verifyToken, isAdmin } = require('../middlewares/auth');
 
-// Todas as rotas de oportunidades requerem autenticação
+// Rotas públicas (chamadas pelo bot-runner sem autenticação)
+router.post('/sync', oportunidadeController.syncOportunidade);
+router.post('/sync-item', oportunidadeController.syncItem);
+router.post('/finish', oportunidadeController.finishOportunidade);
+
+// Todas as outras rotas de oportunidades requerem autenticação
 router.use(verifyToken);
 
 // Rotas de listagem e busca

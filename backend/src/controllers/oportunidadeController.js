@@ -381,3 +381,200 @@ exports.deleteOportunidade = async (req, res) => {
     });
   }
 };
+
+// Sincronizar oportunidade (chamado pelo bot-runner)
+exports.syncOportunidade = async (req, res) => {
+  try {
+    const {
+      numero,
+      descricao,
+      datainicio,
+      datafim,
+      totalitens,
+      bottag
+    } = req.body;
+
+    if (!numero) {
+      return res.status(400).json({
+        success: false,
+        message: 'Número da oportunidade é obrigatório'
+      });
+    }
+
+    // Converter datas do formato DD.MM.YYYY para YYYY-MM-DD
+    const parseDate = (dateStr) => {
+      if (!dateStr) return null;
+      const parts = dateStr.split('.');
+      if (parts.length === 3) {
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+      return dateStr;
+    };
+
+    const dataInicioFormatada = parseDate(datainicio);
+    const dataFimFormatada = parseDate(datafim);
+
+    // Verificar se a oportunidade já existe
+    const [existing] = await promisePool.query(
+      'SELECT opt_id FROM tb_oportunidades WHERE opt_numero = ?',
+      [numero]
+    );
+
+    let optId;
+
+    if (existing.length > 0) {
+      // Atualizar oportunidade existente
+      optId = existing[0].opt_id;
+      await promisePool.query(`
+        UPDATE tb_oportunidades
+        SET opt_descricao = ?, opt_datainicio = ?, opt_datafim = ?, opt_totalitens = ?, opt_status = 0
+        WHERE opt_id = ?
+      `, [descricao, dataInicioFormatada, dataFimFormatada, totalitens || 0, optId]);
+
+      console.log(`[SyncOP] Oportunidade ${numero} atualizada (ID: ${optId})`);
+    } else {
+      // Criar nova oportunidade
+      const [result] = await promisePool.query(`
+        INSERT INTO tb_oportunidades (opt_numero, opt_descricao, opt_datainicio, opt_datafim, opt_totalitens, opt_status)
+        VALUES (?, ?, ?, ?, ?, 0)
+      `, [numero, descricao, dataInicioFormatada, dataFimFormatada, totalitens || 0]);
+
+      optId = result.insertId;
+      console.log(`[SyncOP] Oportunidade ${numero} criada (ID: ${optId})`);
+    }
+
+    res.json({
+      success: true,
+      message: `Oportunidade ${numero} sincronizada`,
+      data: {
+        opt_id: optId,
+        opt_numero: numero
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao sincronizar oportunidade:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao sincronizar oportunidade',
+      error: error.message
+    });
+  }
+};
+
+// Sincronizar item da oportunidade (chamado pelo bot-runner)
+exports.syncItem = async (req, res) => {
+  try {
+    const {
+      opNumero,
+      itemNumero,
+      descricao,
+      quantidade,
+      unidade,
+      bottag
+    } = req.body;
+
+    if (!opNumero || !itemNumero) {
+      return res.status(400).json({
+        success: false,
+        message: 'Número da OP e do item são obrigatórios'
+      });
+    }
+
+    // Buscar ID da oportunidade
+    const [op] = await promisePool.query(
+      'SELECT opt_id FROM tb_oportunidades WHERE opt_numero = ?',
+      [opNumero]
+    );
+
+    if (op.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Oportunidade ${opNumero} não encontrada`
+      });
+    }
+
+    const optId = op[0].opt_id;
+
+    // Verificar se o item já existe
+    const [existingItem] = await promisePool.query(
+      'SELECT optitem_id FROM tb_oportunidades_itens WHERE optitem_idop = ? AND optitem_item = ?',
+      [optId, itemNumero]
+    );
+
+    let itemId;
+
+    if (existingItem.length > 0) {
+      // Atualizar item existente
+      itemId = existingItem[0].optitem_id;
+      await promisePool.query(`
+        UPDATE tb_oportunidades_itens
+        SET optitem_descricao = ?, optitem_quantidade = ?, optitem_unidade = ?,
+            optitem_dataresgate = NOW(), optitem_robo = ?
+        WHERE optitem_id = ?
+      `, [descricao, quantidade, unidade, bottag, itemId]);
+    } else {
+      // Criar novo item
+      const [result] = await promisePool.query(`
+        INSERT INTO tb_oportunidades_itens
+        (optitem_idop, optitem_item, optitem_descricao, optitem_quantidade, optitem_unidade, optitem_dataresgate, optitem_robo)
+        VALUES (?, ?, ?, ?, ?, NOW(), ?)
+      `, [optId, itemNumero, descricao, quantidade, unidade, bottag]);
+      itemId = result.insertId;
+    }
+
+    res.json({
+      success: true,
+      message: `Item ${itemNumero} sincronizado`,
+      data: { optitem_id: itemId }
+    });
+
+  } catch (error) {
+    console.error('Erro ao sincronizar item:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao sincronizar item',
+      error: error.message
+    });
+  }
+};
+
+// Finalizar oportunidade (marcar como completa)
+exports.finishOportunidade = async (req, res) => {
+  try {
+    const { numero } = req.body;
+
+    if (!numero) {
+      return res.status(400).json({
+        success: false,
+        message: 'Número da oportunidade é obrigatório'
+      });
+    }
+
+    const [result] = await promisePool.query(`
+      UPDATE tb_oportunidades SET opt_status = 1 WHERE opt_numero = ?
+    `, [numero]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Oportunidade não encontrada'
+      });
+    }
+
+    console.log(`[SyncOP] Oportunidade ${numero} finalizada`);
+
+    res.json({
+      success: true,
+      message: `Oportunidade ${numero} finalizada`
+    });
+
+  } catch (error) {
+    console.error('Erro ao finalizar oportunidade:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao finalizar oportunidade',
+      error: error.message
+    });
+  }
+};
