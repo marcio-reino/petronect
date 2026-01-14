@@ -15,13 +15,13 @@ const BOT_SCRIPT = 'bot-runner.js';
 async function fetchNextOpFromQueue(roboId) {
   try {
     const [rows] = await promisePool.query(
-      `SELECT opesp_op_numero FROM tb_robo_oportunidades_especificas
-       WHERE opesp_robo_id = ? AND opesp_status = 'pending'
-       ORDER BY opesp_ordem ASC, opesp_datacriacao ASC
+      `SELECT opesp_numero FROM tb_oportunidades_especificas
+       WHERE opesp_robo_id = ?
+       ORDER BY opesp_ordem ASC, opesp_datacadastro ASC
        LIMIT 1`,
       [roboId]
     );
-    return rows.length > 0 ? rows[0].opesp_op_numero : null;
+    return rows.length > 0 ? rows[0].opesp_numero : null;
   } catch (error) {
     console.error('[BotManager] Erro ao buscar próxima OP:', error);
     return null;
