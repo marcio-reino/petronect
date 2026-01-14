@@ -5,10 +5,10 @@ const { promisePool } = require('../config/database');
 // Map de processos ativos: robo_id → { process, bottag, robo }
 const runningBots = new Map();
 
-// Diretório base dos bots
-const BOTS_DIR = path.join(__dirname, '../../bots');
+// Diretório do Playwright Service (onde fica o bot-runner.js)
+const PLAYWRIGHT_DIR = path.join(__dirname, '../../../playwright');
 
-// Sempre usar bot-runner.js que se comunica com o Playwright Service
+// Script do bot que se comunica com o Playwright Service
 const BOT_SCRIPT = 'bot-runner.js';
 
 // Buscar próxima OP da fila de oportunidades específicas
@@ -48,7 +48,7 @@ function startBot(robo) {
 
   // Argumentos para o bot-runner
   const args = [
-    path.join(BOTS_DIR, BOT_SCRIPT),
+    path.join(PLAYWRIGHT_DIR, BOT_SCRIPT),
     '--roboId', String(roboId),
     '--login', robo.robo_user,
     '--senha', robo.robo_senha,
@@ -67,7 +67,7 @@ function startBot(robo) {
 
   try {
     const proc = spawn('node', args, {
-      cwd: BOTS_DIR,
+      cwd: PLAYWRIGHT_DIR,
       stdio: ['pipe', 'pipe', 'pipe'],
       detached: false
     });

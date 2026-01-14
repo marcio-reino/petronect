@@ -689,8 +689,8 @@ exports.reorderOportunidadesEspecificas = async (req, res) => {
 // CONTROLE DO BOT (MONITOR)
 // =============================================
 
-// Diretório de screenshots
-const SCREENSHOTS_DIR = path.resolve(__dirname, '../../bots/screenshots');
+// Diretório de screenshots - na pasta do playwright
+const SCREENSHOTS_DIR = path.resolve(__dirname, '../../../playwright/screenshots');
 
 // Retorna screenshot do bot
 exports.getScreenshot = async (req, res) => {

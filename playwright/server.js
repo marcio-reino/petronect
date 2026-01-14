@@ -32,8 +32,8 @@ const browsers = new Map(); // browserId -> { browser, pages: Map(pageId -> page
 let browserIdCounter = 0;
 let pageIdCounter = 0;
 
-// Diretório de screenshots - usar diretório do backend para compatibilidade
-const SCREENSHOTS_DIR = process.env.SCREENSHOTS_DIR || path.join(__dirname, '../backend/bots/screenshots');
+// Diretório de screenshots - na pasta do playwright
+const SCREENSHOTS_DIR = process.env.SCREENSHOTS_DIR || path.join(__dirname, 'screenshots');
 if (!fs.existsSync(SCREENSHOTS_DIR)) {
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 }
