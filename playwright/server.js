@@ -48,6 +48,24 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Servir screenshots por nome do robô (bottag)
+app.get('/screenshots/:bottag', (req, res) => {
+  try {
+    const { bottag } = req.params;
+    const screenshotPath = path.join(SCREENSHOTS_DIR, `${bottag}.png`);
+
+    if (!fs.existsSync(screenshotPath)) {
+      return res.status(404).json({ success: false, error: 'Screenshot não encontrada' });
+    }
+
+    // Enviar o arquivo de imagem
+    res.sendFile(screenshotPath);
+  } catch (error) {
+    console.error('[PlaywrightService] Erro ao servir screenshot:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Listar browsers ativos
 app.get('/browsers', (req, res) => {
   const browserList = [];

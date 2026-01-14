@@ -1,7 +1,5 @@
 const { promisePool } = require('../config/database');
 const botManager = require('../services/botManager');
-const path = require('path');
-const fs = require('fs');
 
 // Armazena códigos de verificação pendentes por robo_id
 const pendingVerificationCodes = new Map();
@@ -689,10 +687,10 @@ exports.reorderOportunidadesEspecificas = async (req, res) => {
 // CONTROLE DO BOT (MONITOR)
 // =============================================
 
-// Diretório de screenshots - na pasta do playwright
-const SCREENSHOTS_DIR = path.resolve(__dirname, '../../../playwright/screenshots');
+// URL base do Playwright Service
+const PLAYWRIGHT_BASE = process.env.PLAYWRIGHT_BASE || 'http://localhost:3003';
 
-// Retorna screenshot do bot
+// Retorna screenshot do bot (busca do Playwright Service via HTTP)
 exports.getScreenshot = async (req, res) => {
   try {
     const { id } = req.params;
@@ -711,19 +709,25 @@ exports.getScreenshot = async (req, res) => {
     }
 
     const bottag = robos[0].robo_nome.replace(/ /g, '_');
-    const screenshotPath = path.resolve(SCREENSHOTS_DIR, `${bottag}.png`);
 
-    // Verificar se arquivo existe
-    if (fs.existsSync(screenshotPath)) {
-      // Usar caminho absoluto resolvido para sendFile
-      res.sendFile(screenshotPath);
-    } else {
-      // Retornar placeholder ou 404
-      res.status(404).json({
+    // Buscar screenshot do Playwright Service
+    const screenshotUrl = `${PLAYWRIGHT_BASE}/screenshots/${bottag}`;
+
+    const response = await fetch(screenshotUrl);
+
+    if (!response.ok) {
+      return res.status(404).json({
         success: false,
         message: 'Screenshot não disponível'
       });
     }
+
+    // Fazer proxy da imagem
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+    const buffer = await response.arrayBuffer();
+    res.send(Buffer.from(buffer));
   } catch (error) {
     console.error('Erro ao buscar screenshot:', error);
     res.status(500).json({
@@ -835,18 +839,6 @@ exports.startBot = async (req, res) => {
         success: false,
         message: 'Bot já está em execução'
       });
-    }
-
-    // Excluir screenshot antigo antes de iniciar
-    const bottag = robo.robo_nome.replace(/ /g, '_');
-    const screenshotPath = path.resolve(SCREENSHOTS_DIR, `${bottag}.png`);
-    if (fs.existsSync(screenshotPath)) {
-      try {
-        fs.unlinkSync(screenshotPath);
-        console.log(`[startBot] Screenshot antigo excluído: ${screenshotPath}`);
-      } catch (err) {
-        console.error(`[startBot] Erro ao excluir screenshot: ${err.message}`);
-      }
     }
 
     // Buscar próxima OP da fila (se houver)
