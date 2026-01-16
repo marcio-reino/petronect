@@ -84,6 +84,16 @@ function startBot(robo) {
     proc.on('close', async (code) => {
       console.log(`[BotManager] Bot ${bottag} finalizado com código ${code}`);
 
+      // Verificar se o bot foi parado manualmente (flag stopping ou código 99)
+      const botInfo = runningBots.get(roboId);
+      const wasStopping = botInfo?.stopping === true;
+
+      if (wasStopping || code === 99) {
+        console.log(`[BotManager] Bot ${bottag} parado manualmente, não reiniciar`);
+        runningBots.delete(roboId);
+        return;
+      }
+
       // Se código 0, significa reiniciar o bot
       if (code === 0) {
         console.log(`[BotManager] Reiniciando bot ${bottag}...`);
@@ -162,27 +172,48 @@ async function stopBot(roboId) {
 
     console.log(`[BotManager] Parando bot ${bottag} (PID: ${proc.pid})`);
 
+    // Marcar como sendo parado para evitar reinício
+    botInfo.stopping = true;
+
     // Enviar comando de stop via stdin (funciona em Windows e Linux)
-    proc.stdin.write('STOP\n');
+    try {
+      proc.stdin.write('STOP\n');
+    } catch (e) {
+      console.log(`[BotManager] Erro ao enviar STOP via stdin: ${e.message}`);
+    }
 
     // Aguardar um pouco para o bot processar
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Se ainda estiver rodando, forçar kill
-    if (!proc.killed) {
-      console.log(`[BotManager] Forçando encerramento do bot ${bottag}`);
-      if (process.platform === 'win32') {
-        // No Windows, usar taskkill para matar a árvore de processos
-        const { exec } = require('child_process');
-        exec(`taskkill /pid ${proc.pid} /T /F`, (err) => {
-          if (err) console.log(`[BotManager] taskkill: ${err.message}`);
-        });
-      } else {
+    // Forçar kill imediatamente (não esperar mais)
+    console.log(`[BotManager] Forçando encerramento do bot ${bottag}`);
+
+    if (process.platform === 'win32') {
+      // No Windows, usar taskkill para matar a árvore de processos
+      const { exec } = require('child_process');
+      exec(`taskkill /pid ${proc.pid} /T /F`, (err) => {
+        if (err) console.log(`[BotManager] taskkill: ${err.message}`);
+      });
+    } else {
+      try {
         proc.kill('SIGKILL');
+      } catch (e) {
+        console.log(`[BotManager] Erro ao matar processo: ${e.message}`);
       }
     }
 
+    // Remover do mapa imediatamente
     runningBots.delete(roboId);
+
+    // Atualizar status no banco para garantir que não reinicie
+    try {
+      await promisePool.query(
+        'UPDATE tb_robo SET robo_status = 0 WHERE robo_id = ?',
+        [roboId]
+      );
+    } catch (dbErr) {
+      console.error(`[BotManager] Erro ao atualizar status no banco:`, dbErr.message);
+    }
 
     return {
       success: true,

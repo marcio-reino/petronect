@@ -1,9 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import axios from 'axios'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+import api from '@/config/api'
 
 interface Company {
   company_id: number
@@ -39,12 +37,12 @@ export default function UserCompaniesModal({ isOpen, onClose, userId, userName }
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
 
       // Buscar todas as empresas
-      const companiesRes = await axios.get(`${API_DOMAIN}/companies`, {
+      const companiesRes = await api.get(`/companies`, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
       // Buscar empresas do usuário
-      const userCompaniesRes = await axios.get(`${API_DOMAIN}/users/${userId}/companies`, {
+      const userCompaniesRes = await api.get(`/users/${userId}/companies`, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
@@ -77,8 +75,8 @@ export default function UserCompaniesModal({ isOpen, onClose, userId, userName }
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
 
-      await axios.put(
-        `${API_DOMAIN}/users/${userId}/companies`,
+      await api.put(
+        `/users/${userId}/companies`,
         { companyIds: userCompanies },
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -116,7 +114,7 @@ export default function UserCompaniesModal({ isOpen, onClose, userId, userName }
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
+        <div className="p-6 overflow-y-auto max-h-[60vh] scrollbar-gray">
           {error && (
             <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
               <div className="flex items-center">

@@ -1,10 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import axios from 'axios'
+import api from '@/config/api'
 import { APP_CONFIG } from '@/config/app.config'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 
 interface UserChangePasswordModalProps {
   isOpen: boolean
@@ -52,8 +50,8 @@ export default function UserChangePasswordModal({ isOpen, onClose }: UserChangeP
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
 
-      await axios.put(
-        `${API_DOMAIN}/users/change-password`,
+      await api.put(
+        `/users/change-password`,
         {
           currentPassword,
           newPassword

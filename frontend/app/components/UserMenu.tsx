@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import axios from 'axios'
+import api from '@/config/api'
 import { APP_CONFIG, getGradientStyle } from '@/config/app.config'
 import UserProfileModal from './UserProfileModal'
+import PlanModal from './PlanModal'
 import { useTheme } from '../contexts/ThemeContext'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 
 interface UserData {
   name: string
@@ -22,6 +21,7 @@ interface UserData {
 export default function UserMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false)
   const [user, setUser] = useState<UserData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
@@ -40,11 +40,7 @@ export default function UserMenu() {
           return
         }
 
-        const response = await axios.get(`${API_DOMAIN}/users/profile`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
+        const response = await api.get('/users/profile')
 
         if (response.data.success && response.data.data) {
           const userData = response.data.data
@@ -137,12 +133,7 @@ export default function UserMenu() {
     // Recarregar dados do perfil do backend para garantir sincronização
     const fetchUserProfile = async () => {
       try {
-        const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-        const response = await axios.get(`${API_DOMAIN}/users/profile`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
+        const response = await api.get('/users/profile')
 
         if (response.data.success && response.data.data) {
           const userData = response.data.data
@@ -259,14 +250,16 @@ export default function UserMenu() {
             {APP_CONFIG.messages.userMenu.profile}
           </button>
 
-          <a
-            href="/dashboard/configuracoes"
-            className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-[#dddddd] hover:bg-gray-50 dark:hover:bg-[#333333] transition"
-            onClick={() => setIsOpen(false)}
+          <button
+            onClick={() => {
+              setIsOpen(false)
+              setIsPlanModalOpen(true)
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-[#dddddd] hover:bg-gray-50 dark:hover:bg-[#333333] transition"
           >
-            <i className="fas fa-cog w-4"></i>
-            {APP_CONFIG.messages.userMenu.settings}
-          </a>
+            <i className="fas fa-file-contract w-4"></i>
+            {APP_CONFIG.messages.userMenu.plan}
+          </button>
 
           {/* Modo Escuro Switch */}
           <div className="px-4 py-2">
@@ -312,6 +305,12 @@ export default function UserMenu() {
         onClose={() => setIsProfileModalOpen(false)}
         user={user}
         onSave={handleSaveProfile}
+      />
+
+      {/* Modal de Plano */}
+      <PlanModal
+        isOpen={isPlanModalOpen}
+        onClose={() => setIsPlanModalOpen(false)}
       />
     </div>
   )

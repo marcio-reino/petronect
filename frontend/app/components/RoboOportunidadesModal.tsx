@@ -1,9 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import axios from 'axios'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+import api from '@/config/api'
 
 interface OportunidadeEspecifica {
   opesp_id: number
@@ -81,7 +79,7 @@ export default function RoboOportunidadesModal({ isOpen, onClose, robo }: RoboOp
     setError(null)
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.get(`${API_DOMAIN}/robos/${robo.robo_id}/oportunidades-especificas`, {
+      const res = await api.get(`/robos/${robo.robo_id}/oportunidades-especificas`, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
@@ -119,8 +117,8 @@ export default function RoboOportunidadesModal({ isOpen, onClose, robo }: RoboOp
 
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.post(
-        `${API_DOMAIN}/robos/${robo.robo_id}/oportunidades-especificas/lote`,
+      const res = await api.post(
+        `/robos/${robo.robo_id}/oportunidades-especificas/lote`,
         { numeros },
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -169,8 +167,8 @@ export default function RoboOportunidadesModal({ isOpen, onClose, robo }: RoboOp
 
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.delete(
-        `${API_DOMAIN}/robos/${robo.robo_id}/oportunidades-especificas/${opespId}`,
+      const res = await api.delete(
+        `/robos/${robo.robo_id}/oportunidades-especificas/${opespId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
 
@@ -224,8 +222,8 @@ export default function RoboOportunidadesModal({ isOpen, onClose, robo }: RoboOp
     // Salvar no backend
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      await axios.put(
-        `${API_DOMAIN}/robos/${robo.robo_id}/oportunidades-especificas/reorder`,
+      await api.put(
+        `/robos/${robo.robo_id}/oportunidades-especificas/reorder`,
         { items: reorderedItems.map(op => ({ opesp_id: op.opesp_id, opesp_ordem: op.opesp_ordem })) },
         { headers: { Authorization: `Bearer ${token}` } }
       )

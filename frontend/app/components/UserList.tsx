@@ -1,13 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import axios from 'axios'
+import api from '@/config/api'
 import StatusBadge from './StatusBadge'
 import UserEditModal from './UserEditModal'
 import UserCreateModal from './UserCreateModal'
 import UserDeleteConfirmModal from './UserDeleteConfirmModal'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 
 interface UserRow {
   user_id: number
@@ -56,10 +54,7 @@ export default function UserList() {
     setLoading(true)
     setError(null)
     try {
-      const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.get(`${API_DOMAIN}/users`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await api.get('/users')
       if (res.data && res.data.success) {
         setUsers(res.data.data)
         setFilteredUsers(res.data.data)
@@ -100,10 +95,7 @@ export default function UserList() {
       // Buscar dados do usuário e abrir o modal
       const loadAndOpenModal = async () => {
         try {
-          const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-          const res = await axios.get(`${API_DOMAIN}/users/${userId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          })
+          const res = await api.get(`/users/${userId}`)
           if (res.data && res.data.success) {
             const userData = res.data.data
             setSelectedUser({
@@ -235,14 +227,11 @@ export default function UserList() {
     setIsDeleting(true)
     setError(null)
     try {
-      const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
       const url = permanent
-        ? `${API_DOMAIN}/users/${userToDelete.user_id}?permanent=true`
-        : `${API_DOMAIN}/users/${userToDelete.user_id}`
+        ? `/users/${userToDelete.user_id}?permanent=true`
+        : `/users/${userToDelete.user_id}`
 
-      const res = await axios.delete(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await api.delete(url)
 
       if (res.data && res.data.success) {
         // Recarregar lista completa para refletir mudanças

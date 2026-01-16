@@ -1,9 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import axios from 'axios'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+import api from '@/config/api'
 
 interface RoleCreateModalProps {
   isOpen: boolean
@@ -34,8 +32,8 @@ export default function RoleCreateModal({ isOpen, onClose, onSave }: RoleCreateM
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
 
       // Criar cargo no backend
-      const response = await axios.post(
-        `${API_DOMAIN}/users/roles`,
+      const response = await api.post(
+        `/users/roles`,
         {
           name: formData.name,
           description: formData.description
@@ -75,7 +73,7 @@ export default function RoleCreateModal({ isOpen, onClose, onSave }: RoleCreateM
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto fade-in">
+      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto fade-in scrollbar-gray">
         {/* Header */}
         <div className="px-6 py-4 border-b dark:border-[#444444] flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-800 dark:text-[#eeeeee]">Novo Cargo</h2>

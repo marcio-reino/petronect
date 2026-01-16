@@ -21,7 +21,7 @@ export default function UserDeleteConfirmModal({ isOpen, onClose, onConfirm, use
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto fade-in">
+      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto fade-in scrollbar-gray">
         <div className="p-6">
           {/* Header */}
           <div className="flex items-center mb-4">

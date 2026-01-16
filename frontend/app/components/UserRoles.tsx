@@ -1,18 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import axios from 'axios'
+import api from '@/config/api'
 import { APP_CONFIG } from '@/config/app.config'
 import UserRolePermissionsModal from './UserRolePermissionsModal'
 import RoleCreateModal from './RoleCreateModal'
 import RoleDeleteConfirmModal from './RoleDeleteConfirmModal'
 import StatusBadge from './StatusBadge'
 
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
-
 interface RoleRow {
   role_id: number
   role_uuid: string
+  role_key: string
   role_name: string
   role_description: string
   role_permissions: string
@@ -41,7 +40,7 @@ export default function UserRoles() {
     setError(null)
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.get(`${API_DOMAIN}/users/roles`, {
+      const res = await api.get(`/users/roles`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (res.data && res.data.success) {
@@ -113,10 +112,10 @@ export default function UserRoles() {
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
       const url = permanent
-        ? `${API_DOMAIN}/users/roles/${roleToDelete.role_id}?permanent=true`
-        : `${API_DOMAIN}/users/roles/${roleToDelete.role_id}`
+        ? `/users/roles/${roleToDelete.role_id}?permanent=true`
+        : `/users/roles/${roleToDelete.role_id}`
 
-      const res = await axios.delete(url, {
+      const res = await api.delete(url, {
         headers: { Authorization: `Bearer ${token}` }
       })
 

@@ -1,5 +1,7 @@
 const { promisePool } = require('../config/database');
 const botManager = require('../services/botManager');
+const fs = require('fs');
+const path = require('path');
 
 // Armazena códigos de verificação pendentes por robo_id
 const pendingVerificationCodes = new Map();
@@ -886,6 +888,12 @@ exports.stopBot = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Buscar nome do robô para excluir screenshot
+    const [robos] = await promisePool.query(
+      'SELECT robo_nome FROM tb_robo WHERE robo_id = ?',
+      [id]
+    );
+
     // Tentar parar o processo se estiver rodando
     const result = botManager.stopBot(parseInt(id));
 
@@ -906,6 +914,22 @@ exports.stopBot = async (req, res) => {
       'INSERT INTO tb_robo_historico (hist_robo_id, hist_mensagem) VALUES (?, ?)',
       [id, 'Agente parado pelo usuário']
     );
+
+    // Excluir arquivo de screenshot do agente
+    if (robos.length > 0) {
+      const bottag = robos[0].robo_nome.replace(/ /g, '_');
+      const screenshotDir = process.env.SCREENSHOTS_DIR || path.join(__dirname, '../../playwright/screenshots');
+      const screenshotPath = path.join(screenshotDir, `${bottag}.png`);
+
+      try {
+        if (fs.existsSync(screenshotPath)) {
+          fs.unlinkSync(screenshotPath);
+          console.log(`[StopBot] Screenshot excluído: ${screenshotPath}`);
+        }
+      } catch (err) {
+        console.error(`[StopBot] Erro ao excluir screenshot:`, err.message);
+      }
+    }
 
     // Se o processo estava rodando, retorna sucesso do botManager
     // Caso contrário, retorna sucesso indicando que o status foi atualizado
@@ -1258,6 +1282,104 @@ exports.cancelVerification = async (req, res) => {
     });
   }
 };
+
+// =============================================
+// LIMPEZA DE HISTÓRICO
+// =============================================
+
+// Limpar histórico mantendo apenas os últimos N registros de cada robô
+exports.cleanupHistorico = async (req, res) => {
+  try {
+    const limite = parseInt(req.query.limite) || 500;
+
+    // Buscar todos os robôs
+    const [robos] = await promisePool.query('SELECT robo_id FROM tb_robo');
+
+    let totalExcluidos = 0;
+
+    for (const robo of robos) {
+      const roboId = robo.robo_id;
+
+      // Contar registros atuais
+      const [countResult] = await promisePool.query(
+        'SELECT COUNT(*) as total FROM tb_robo_historico WHERE hist_robo_id = ?',
+        [roboId]
+      );
+      const totalRegistros = countResult[0].total;
+
+      if (totalRegistros > limite) {
+        // Excluir registros antigos mantendo apenas os últimos N
+        const [deleteResult] = await promisePool.query(`
+          DELETE FROM tb_robo_historico
+          WHERE hist_robo_id = ? AND hist_id NOT IN (
+            SELECT hist_id FROM (
+              SELECT hist_id FROM tb_robo_historico
+              WHERE hist_robo_id = ?
+              ORDER BY hist_datacriacao DESC
+              LIMIT ?
+            ) AS t
+          )
+        `, [roboId, roboId, limite]);
+
+        totalExcluidos += deleteResult.affectedRows;
+        console.log(`[Cleanup] Robô ${roboId}: ${deleteResult.affectedRows} registros excluídos`);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Limpeza concluída: ${totalExcluidos} registro(s) excluído(s)`,
+      data: {
+        totalExcluidos,
+        limite,
+        robosProcessados: robos.length
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao limpar histórico:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao limpar histórico',
+      error: error.message
+    });
+  }
+};
+
+// Função interna para limpeza automática (pode ser chamada por scheduler)
+async function cleanupHistoricoInterno(limite = 500) {
+  try {
+    const [robos] = await promisePool.query('SELECT robo_id FROM tb_robo');
+
+    let totalExcluidos = 0;
+
+    for (const robo of robos) {
+      const roboId = robo.robo_id;
+
+      const [deleteResult] = await promisePool.query(`
+        DELETE FROM tb_robo_historico
+        WHERE hist_robo_id = ? AND hist_id NOT IN (
+          SELECT hist_id FROM (
+            SELECT hist_id FROM tb_robo_historico
+            WHERE hist_robo_id = ?
+            ORDER BY hist_datacriacao DESC
+            LIMIT ?
+          ) AS t
+        )
+      `, [roboId, roboId, limite]);
+
+      totalExcluidos += deleteResult.affectedRows;
+    }
+
+    console.log(`[Cleanup Auto] Total de ${totalExcluidos} registros excluídos`);
+    return totalExcluidos;
+  } catch (error) {
+    console.error('[Cleanup Auto] Erro:', error);
+    return 0;
+  }
+}
+
+// Exportar função interna para uso em schedulers
+exports.cleanupHistoricoInterno = cleanupHistoricoInterno;
 
 // =============================================
 // SERVER-SENT EVENTS (SSE) PARA NOTIFICAÇÕES EM TEMPO REAL

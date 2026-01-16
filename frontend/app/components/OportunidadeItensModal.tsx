@@ -1,15 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import axios from 'axios'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+import api from '@/config/api'
 
 interface OportunidadeItem {
   optitem_id: number
   optitem_idop: number
   optitem_item: string
   optitem_descricao: string
+  optitem_descricao_completa: string
   optitem_quantidade: string
   optitem_unidade: string
   optitem_obs: string
@@ -56,7 +55,7 @@ export default function OportunidadeItensModal({ isOpen, onClose, oportunidade }
     setError(null)
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.get(`${API_DOMAIN}/oportunidades/${oportunidade.opt_id}/itens`, {
+      const res = await api.get(`/oportunidades/${oportunidade.opt_id}/itens`, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
@@ -106,8 +105,8 @@ export default function OportunidadeItensModal({ isOpen, onClose, oportunidade }
     setIsSaving(true)
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.put(
-        `${API_DOMAIN}/oportunidades/itens/${selectedItem.optitem_id}`,
+      const res = await api.put(
+        `/oportunidades/itens/${selectedItem.optitem_id}`,
         { optitem_obs: comentario },
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -125,6 +124,30 @@ export default function OportunidadeItensModal({ isOpen, onClose, oportunidade }
       setError(err.response?.data?.message || err.message || 'Erro ao salvar comentário')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  // Navegação entre itens
+  const getCurrentItemIndex = () => {
+    if (!selectedItem) return -1
+    return itens.findIndex(item => item.optitem_id === selectedItem.optitem_id)
+  }
+
+  const handlePreviousItem = () => {
+    const currentIndex = getCurrentItemIndex()
+    if (currentIndex > 0) {
+      const prevItem = itens[currentIndex - 1]
+      setSelectedItem(prevItem)
+      setComentario(prevItem.optitem_obs || '')
+    }
+  }
+
+  const handleNextItem = () => {
+    const currentIndex = getCurrentItemIndex()
+    if (currentIndex < itens.length - 1) {
+      const nextItem = itens[currentIndex + 1]
+      setSelectedItem(nextItem)
+      setComentario(nextItem.optitem_obs || '')
     }
   }
 
@@ -154,7 +177,7 @@ export default function OportunidadeItensModal({ isOpen, onClose, oportunidade }
           </div>
 
           {/* Info da Oportunidade */}
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-[#444444]">
+          <div className="px-6 py-4">
             <div className="flex flex-wrap items-end gap-4">
               {/* Descrição */}
               <div className="flex-1 min-w-[200px]">
@@ -199,7 +222,7 @@ export default function OportunidadeItensModal({ isOpen, onClose, oportunidade }
           </div>
 
           {/* Tabela de Itens */}
-          <div className="h-[320px] overflow-auto px-6 py-4">
+          <div className="h-[320px] overflow-auto px-6 py-4 scrollbar-gray">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <i className="fas fa-spinner fa-spin text-2xl text-teal-600"></i>
@@ -289,28 +312,28 @@ export default function OportunidadeItensModal({ isOpen, onClose, oportunidade }
       {/* Modal de Comentário */}
       {isCommentModalOpen && selectedItem && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
-          <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden fade-in">
+          <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden fade-in">
             {/* Header */}
-            <div className="bg-[#1a1a1a] dark:bg-[#222222] px-6 py-4 flex items-start justify-between">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-[#444444] flex items-start justify-between">
               <div>
-                <h3 className="text-lg font-bold text-white">
+                <h3 className="text-lg font-bold text-gray-800 dark:text-[#eeeeee]">
                   Comentário do Item
                 </h3>
-                <span className="text-sm text-gray-400">
+                <span className="text-sm text-gray-500 dark:text-[#aaaaaa]">
                   Item {selectedItem.optitem_item}
                 </span>
               </div>
               <button
                 onClick={handleCloseCommentModal}
-                className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition"
+                className="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-[#333333] flex items-center justify-center transition"
                 title="Fechar"
               >
-                <i className="fas fa-times text-white"></i>
+                <i className="fas fa-times text-gray-500 dark:text-[#aaaaaa]"></i>
               </button>
             </div>
 
             {/* Info do Item */}
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-[#444444]">
+            <div className="px-6 pt-4">
               <div className="grid grid-cols-2 gap-4">
                 {/* Robô de Resgate */}
                 <div>
@@ -334,9 +357,21 @@ export default function OportunidadeItensModal({ isOpen, onClose, oportunidade }
               </div>
             </div>
 
+            {/* Descrição Completa */}
+            {selectedItem.optitem_descricao_completa && (
+              <div className="px-6 pt-4">
+                <label className="block text-sm font-medium text-gray-600 dark:text-[#aaaaaa] mb-1">
+                  Descrição Completa
+                </label>
+                <div className="px-3 py-2 bg-gray-50 dark:bg-[#333333] border border-gray-200 dark:border-[#444444] rounded-lg text-sm text-gray-700 dark:text-[#eeeeee] max-h-[120px] overflow-y-auto whitespace-pre-wrap">
+                  {selectedItem.optitem_descricao_completa}
+                </div>
+              </div>
+            )}
+
             {/* Comentário */}
-            <div className="px-6 py-4">
-              <label className="block text-sm font-medium text-gray-600 dark:text-[#aaaaaa] mb-2">
+            <div className="px-6 pt-4 pb-4">
+              <label className="block text-sm font-medium text-gray-600 dark:text-[#aaaaaa] mb-1">
                 Comentário
               </label>
               <textarea
@@ -349,31 +384,57 @@ export default function OportunidadeItensModal({ isOpen, onClose, oportunidade }
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-gray-200 dark:border-[#444444] flex justify-end gap-3">
-              <button
-                onClick={handleCloseCommentModal}
-                disabled={isSaving}
-                className="px-4 py-2 bg-gray-200 dark:bg-[#333333] text-gray-700 dark:text-[#dddddd] rounded-lg hover:bg-gray-300 dark:hover:bg-[#444444] transition-colors disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveComment}
-                disabled={isSaving}
-                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {isSaving ? (
-                  <>
-                    <i className="fas fa-spinner fa-spin"></i>
-                    Salvando...
-                  </>
-                ) : (
-                  <>
-                    <i className="fas fa-save"></i>
-                    Salvar
-                  </>
-                )}
-              </button>
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-[#444444] flex justify-between items-center">
+              {/* Navegação entre itens */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePreviousItem}
+                  disabled={isSaving || getCurrentItemIndex() <= 0}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-200 dark:bg-[#333333] text-gray-700 dark:text-[#dddddd] hover:bg-gray-300 dark:hover:bg-[#444444] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Item anterior"
+                >
+                  <i className="fas fa-chevron-left"></i>
+                </button>
+                <span className="text-sm text-gray-500 dark:text-[#aaaaaa] min-w-[60px] text-center">
+                  {getCurrentItemIndex() + 1} / {itens.length}
+                </span>
+                <button
+                  onClick={handleNextItem}
+                  disabled={isSaving || getCurrentItemIndex() >= itens.length - 1}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-200 dark:bg-[#333333] text-gray-700 dark:text-[#dddddd] hover:bg-gray-300 dark:hover:bg-[#444444] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Próximo item"
+                >
+                  <i className="fas fa-chevron-right"></i>
+                </button>
+              </div>
+
+              {/* Botões de ação */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleCloseCommentModal}
+                  disabled={isSaving}
+                  className="px-4 py-2 bg-gray-200 dark:bg-[#333333] text-gray-700 dark:text-[#dddddd] rounded-lg hover:bg-gray-300 dark:hover:bg-[#444444] transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveComment}
+                  disabled={isSaving}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isSaving ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i>
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-save"></i>
+                      Salvar
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

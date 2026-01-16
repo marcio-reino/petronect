@@ -1,11 +1,10 @@
 const { promisePool } = require('../config/database');
-const { v4: uuidv4 } = require('uuid');
 
 /**
  * Registrar log de atividade do sistema
  * @param {Object} logData - Dados do log
  * @param {number} logData.userId - ID do usuário que executou a ação
- * @param {string} logData.userName - Nome do usuário
+ * @param {string} logData.userName - Nome do usuário (para exibição no console)
  * @param {string} logData.action - Ação realizada (CREATE, UPDATE, DELETE, etc)
  * @param {string} logData.module - Módulo do sistema (users, roles, clients, etc)
  * @param {string} logData.entityType - Tipo de entidade afetada
@@ -18,8 +17,6 @@ const { v4: uuidv4 } = require('uuid');
  */
 async function logSystemActivity(logData) {
   try {
-    const logUuid = uuidv4();
-    
     // Garantir que o entityId seja um inteiro ou null para evitar erros de truncamento
     let sanitizedEntityId = null;
     if (logData.entityId !== undefined && logData.entityId !== null) {
@@ -39,9 +36,7 @@ async function logSystemActivity(logData) {
 
     await promisePool.query(
       `INSERT INTO tb_system_logs (
-        log_uuid,
         log_user_id,
-        log_user_name,
         log_action,
         log_module,
         log_entity_type,
@@ -51,13 +46,10 @@ async function logSystemActivity(logData) {
         log_new_data,
         log_ip_address,
         log_user_agent,
-        log_status,
         log_date_insert
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
-        logUuid,
         logData.userId || null,
-        logData.userName || null,
         logData.action,
         logData.module,
         logData.entityType || null,
@@ -72,7 +64,15 @@ async function logSystemActivity(logData) {
 
     console.log(`✓ Log registrado: ${logData.action} em ${logData.module} por ${logData.userName || 'Sistema'}`);
   } catch (error) {
-    console.error('Erro ao registrar log de sistema:', error);
+    console.error('Erro ao registrar log de sistema:', error.message);
+    console.error('Dados do log:', JSON.stringify({
+      userId: logData.userId,
+      userName: logData.userName,
+      action: logData.action,
+      module: logData.module,
+      entityType: logData.entityType,
+      entityId: logData.entityId
+    }));
     // Não lançar erro para não quebrar o fluxo principal
   }
 }

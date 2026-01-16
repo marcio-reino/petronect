@@ -1,12 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import axios from 'axios'
+import api from '@/config/api'
 import { APP_CONFIG } from '@/config/app.config'
 import UserChangePasswordModal from './UserChangePasswordModal'
 import ImageCropModal from './ImageCropModal'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 
 interface UserData {
   name: string
@@ -54,7 +52,7 @@ export default function UserProfileModal({ isOpen, onClose, user, onSave }: User
     const fetchRoles = async () => {
       try {
         const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-        const response = await axios.get(`${API_DOMAIN}/users/roles`, {
+        const response = await api.get(`/users/roles`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -86,8 +84,8 @@ export default function UserProfileModal({ isOpen, onClose, user, onSave }: User
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
 
       // Atualizar perfil no backend
-      const response = await axios.put(
-        `${API_DOMAIN}/users/profile`,
+      const response = await api.put(
+        `/users/profile`,
         {
           name: formData.name,
           email: formData.email,
@@ -192,8 +190,8 @@ export default function UserProfileModal({ isOpen, onClose, user, onSave }: User
       uploadFormData.append('avatar', croppedFile)
 
       // Fazer upload
-      const response = await axios.post(
-        `${API_DOMAIN}/users/profile/avatar`,
+      const response = await api.post(
+        `/users/profile/avatar`,
         uploadFormData,
         {
           headers: {
@@ -234,7 +232,7 @@ export default function UserProfileModal({ isOpen, onClose, user, onSave }: User
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto fade-in">
+      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto fade-in scrollbar-gray">
         {/* Header */}
         <div className="px-6 py-4 border-b dark:border-[#444444] flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-800 dark:text-[#eeeeee]">Meu Perfil</h2>

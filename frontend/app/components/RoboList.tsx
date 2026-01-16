@@ -1,13 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import axios from 'axios'
+import api from '@/config/api'
 import StatusBadge from './StatusBadge'
 import RoboEditModal from './RoboEditModal'
 import RoboMonitorModal from './RoboMonitorModal'
 import RoboOportunidadesModal from './RoboOportunidadesModal'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 
 interface RoboRow {
   robo_id: number
@@ -76,9 +74,7 @@ export default function RoboList() {
       if (filtroTipo !== '') params.append('tipo', filtroTipo)
       if (filtroStatus !== '') params.append('status', filtroStatus)
 
-      const res = await axios.get(`${API_DOMAIN}/robos?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await api.get(`/robos?${params.toString()}`)
 
       if (res.data && res.data.success) {
         setRobos(res.data.data)

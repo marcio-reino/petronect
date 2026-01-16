@@ -62,8 +62,9 @@ export default function QuickAccessTabs() {
     // Se não encontrou, procurar nos submenus
     if (!currentPageConfig) {
       for (const item of APP_CONFIG.menu.items) {
-        if (item.submenu) {
-          const submenuItem = item.submenu.find(subitem => subitem.href === pathname)
+        const itemAny = item as any
+        if (itemAny.submenu && Array.isArray(itemAny.submenu)) {
+          const submenuItem = itemAny.submenu.find((subitem: { href: string; label: string }) => subitem.href === pathname)
           if (submenuItem) {
             currentPageConfig = { ...submenuItem, icon: item.icon }
             break

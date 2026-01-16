@@ -48,4 +48,7 @@ router.post('/:id/cancel-verification', roboController.cancelVerification);
 // Rota de debug - simular solicitação de código (remover em produção)
 router.post('/:id/debug-request-verification', roboController.requestVerificationCode);
 
+// Rota de limpeza de histórico (apenas admin)
+router.post('/cleanup-historico', isAdmin, roboController.cleanupHistorico);
+
 module.exports = router;

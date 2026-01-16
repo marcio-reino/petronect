@@ -1,12 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import axios from 'axios'
+import { useEffect, useState, useRef } from 'react'
+import api from '@/config/api'
 import StatusBadge from './StatusBadge'
 import DatePicker from './DatePicker'
 import OportunidadeItensModal from './OportunidadeItensModal'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+import JSZip from 'jszip'
 
 interface OportunidadeRow {
   opt_id: number
@@ -17,6 +16,21 @@ interface OportunidadeRow {
   opt_totalitens: number
   opt_totalempresas: number
   opt_status: number
+}
+
+interface OportunidadeItem {
+  optitem_id: number
+  optitem_idop: number
+  optitem_item: string
+  optitem_descricao: string
+  optitem_descricao_completa: string
+  optitem_quantidade: string
+  optitem_unidade: string
+  optitem_produto_id: string
+  optitem_produto_familia: string
+  optitem_obs: string
+  optitem_dataresgate: string
+  optitem_robo: string
 }
 
 interface Pagination {
@@ -50,6 +64,12 @@ export default function OportunidadeList() {
   const [selectedOportunidade, setSelectedOportunidade] = useState<OportunidadeRow | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  // Estados para download em lote
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [hasFiltered, setHasFiltered] = useState(false)
+  const downloadCancelledRef = useRef(false)
+
   const fetchOportunidades = async (page = 1) => {
     setLoading(true)
     setError(null)
@@ -66,9 +86,7 @@ export default function OportunidadeList() {
       if (filtroDataFim) params.append('dataFim', filtroDataFim)
       if (filtroStatus !== '') params.append('status', filtroStatus)
 
-      const res = await axios.get(`${API_DOMAIN}/oportunidades?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await api.get(`/oportunidades?${params.toString()}`)
 
       if (res.data && res.data.success) {
         setOportunidades(res.data.data)
@@ -89,6 +107,7 @@ export default function OportunidadeList() {
 
   const handleSearch = () => {
     fetchOportunidades(1)
+    setHasFiltered(true)
   }
 
   const handleClearFilters = () => {
@@ -97,6 +116,7 @@ export default function OportunidadeList() {
     setFiltroDataInicio('')
     setFiltroDataFim('')
     setFiltroStatus('')
+    setHasFiltered(false)
     setTimeout(() => fetchOportunidades(1), 0)
   }
 
@@ -138,10 +158,7 @@ export default function OportunidadeList() {
 
     setIsDeleting(true)
     try {
-      const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.delete(`${API_DOMAIN}/oportunidades/${selectedOportunidade.opt_id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await api.delete(`/oportunidades/${selectedOportunidade.opt_id}`)
 
       if (res.data && res.data.success) {
         fetchOportunidades(pagination.page)
@@ -153,6 +170,189 @@ export default function OportunidadeList() {
     } finally {
       setIsDeleting(false)
     }
+  }
+
+  // Formatar data para o padrão DD.MM.YYYY HH:MM:SS
+  const formatDateTxt = (dateString: string) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    const seconds = String(date.getSeconds()).padStart(2, '0')
+    return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`
+  }
+
+  // Formatar quantidade com vírgula (ex: 1.000 -> 1,000)
+  const formatQuantidade = (qtd: string) => {
+    if (!qtd) return '0'
+    const num = parseFloat(qtd)
+    return num.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+  }
+
+  // Download TXT da proposta
+  const handleDownloadTxt = async (op: OportunidadeRow) => {
+    try {
+      // Buscar itens da oportunidade
+      const res = await api.get(`/oportunidades/${op.opt_id}/itens`)
+
+      if (!res.data || !res.data.success) {
+        setError('Falha ao buscar itens para exportação')
+        return
+      }
+
+      const itens: OportunidadeItem[] = res.data.data
+      const now = new Date()
+      const processadoEm = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()} - ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+
+      // Montar conteúdo do TXT
+      let txt = ''
+      txt += '#####################################################################################\n'
+      txt += `OPORTUNIDADE N:    ${op.opt_numero}\n`
+      txt += `DESCRICAO:         ${op.opt_descricao || '-'}\n`
+      txt += `DATA INICIO:       ${formatDateTxt(op.opt_datainicio)}\n`
+      txt += `DATA FIM:          ${formatDateTxt(op.opt_datafim)}\n`
+      txt += `OPPORTUNITY TYPE:  Dispensa Item\n`
+      txt += '#####################################################################################\n'
+      txt += '---------------------------------------------------------------\n'
+      txt += `LISTA DE ITENS - TOTAL: ${itens.length}\n`
+      txt += '---------------------------------------------------------------\n'
+
+      itens.forEach((item) => {
+        txt += `ITEM:            ${item.optitem_item.padStart(4, '0')}\n`
+        txt += `DESCRICAO:       ${item.optitem_descricao || '-'}\n`
+        txt += `TEXTO ITEM:      ${item.optitem_descricao_completa || item.optitem_descricao || '-'}\n`
+        txt += `QUANTIDADE:      ${formatQuantidade(item.optitem_quantidade)}\n`
+        txt += `UNIDADE:         ${item.optitem_unidade || '-'}\n`
+        txt += `ID PRODUTO:      ${item.optitem_produto_id || '-'}\n`
+        txt += `FAMILIA:         ${item.optitem_produto_familia || '-'}\n`
+        txt += '=============================\n'
+      })
+
+      // Pegar robô do primeiro item (se existir)
+      const robo = itens.length > 0 && itens[0].optitem_robo ? itens[0].optitem_robo : 'SISTEMA'
+      txt += `PROCESSADO EM:   ${processadoEm} - ${robo}\n`
+      txt += '######################################## FIM ########################################\n'
+
+      // Criar e baixar arquivo
+      const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${op.opt_numero}.txt`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Erro ao gerar arquivo TXT')
+    }
+  }
+
+  // Gerar conteúdo TXT para uma oportunidade (reutilizável)
+  const generateTxtContent = async (op: OportunidadeRow): Promise<string> => {
+    const res = await api.get(`/oportunidades/${op.opt_id}/itens`)
+
+    if (!res.data || !res.data.success) {
+      throw new Error('Falha ao buscar itens')
+    }
+
+    const itens: OportunidadeItem[] = res.data.data
+    const now = new Date()
+    const processadoEm = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()} - ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+
+    let txt = ''
+    txt += '#####################################################################################\n'
+    txt += `OPORTUNIDADE N:    ${op.opt_numero}\n`
+    txt += `DESCRICAO:         ${op.opt_descricao || '-'}\n`
+    txt += `DATA INICIO:       ${formatDateTxt(op.opt_datainicio)}\n`
+    txt += `DATA FIM:          ${formatDateTxt(op.opt_datafim)}\n`
+    txt += `OPPORTUNITY TYPE:  Dispensa Item\n`
+    txt += '#####################################################################################\n'
+    txt += '---------------------------------------------------------------\n'
+    txt += `LISTA DE ITENS - TOTAL: ${itens.length}\n`
+    txt += '---------------------------------------------------------------\n'
+
+    itens.forEach((item) => {
+      txt += `ITEM:            ${item.optitem_item.padStart(4, '0')}\n`
+      txt += `DESCRICAO:       ${item.optitem_descricao || '-'}\n`
+      txt += `TEXTO ITEM:      ${item.optitem_descricao_completa || item.optitem_descricao || '-'}\n`
+      txt += `QUANTIDADE:      ${formatQuantidade(item.optitem_quantidade)}\n`
+      txt += `UNIDADE:         ${item.optitem_unidade || '-'}\n`
+      txt += `ID PRODUTO:      ${item.optitem_produto_id || '-'}\n`
+      txt += `FAMILIA:         ${item.optitem_produto_familia || '-'}\n`
+      txt += '=============================\n'
+    })
+
+    const robo = itens.length > 0 && itens[0].optitem_robo ? itens[0].optitem_robo : 'SISTEMA'
+    txt += `PROCESSADO EM:   ${processadoEm} - ${robo}\n`
+    txt += '######################################## FIM ########################################\n'
+
+    return txt
+  }
+
+  // Download em lote (ZIP)
+  const handleDownloadAll = async () => {
+    setIsDownloadModalOpen(true)
+    setIsDownloading(true)
+    downloadCancelledRef.current = false
+
+    try {
+      const zip = new JSZip()
+
+      // Processar cada oportunidade
+      for (const op of oportunidades) {
+        if (downloadCancelledRef.current) {
+          break
+        }
+
+        try {
+          const txtContent = await generateTxtContent(op)
+          zip.file(`${op.opt_numero}.txt`, txtContent)
+        } catch (err) {
+          console.error(`Erro ao processar OP ${op.opt_numero}:`, err)
+        }
+      }
+
+      if (!downloadCancelledRef.current) {
+        // Gerar o ZIP
+        const zipBlob = await zip.generateAsync({ type: 'blob' })
+
+        // Nome do arquivo com data e hora
+        const now = new Date()
+        const dataHora = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${now.getFullYear()}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+
+        // Baixar arquivo
+        const url = window.URL.createObjectURL(zipBlob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `OPORTUNIDADES_${dataHora}.ZIP`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      }
+
+    } catch (err: any) {
+      if (!downloadCancelledRef.current) {
+        setError(err.message || 'Erro ao gerar arquivo ZIP')
+      }
+    } finally {
+      setIsDownloading(false)
+      // Fechar modal após 2 segundos
+      setTimeout(() => {
+        setIsDownloadModalOpen(false)
+      }, 2000)
+    }
+  }
+
+  const handleCancelDownload = () => {
+    downloadCancelledRef.current = true
+    setIsDownloading(false)
+    setIsDownloadModalOpen(false)
   }
 
   if (loading && oportunidades.length === 0) {
@@ -226,6 +426,15 @@ export default function OportunidadeList() {
               title="Atualizar lista"
             >
               <i className="fas fa-sync-alt"></i>
+            </button>
+            <button
+              onClick={handleDownloadAll}
+              disabled={!hasFiltered || oportunidades.length === 0}
+              className="h-9 px-3 inline-flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-sm font-medium"
+              title={!hasFiltered ? 'Aplique um filtro para habilitar' : 'Baixar todas as oportunidades filtradas'}
+            >
+              <i className="fas fa-download"></i>
+              Baixar Todos
             </button>
           </div>
         </div>
@@ -388,6 +597,14 @@ export default function OportunidadeList() {
                         </button>
 
                         <button
+                          onClick={() => handleDownloadTxt(op)}
+                          className="w-9 h-9 inline-flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                          title="Download TXT"
+                        >
+                          <i className="fas fa-file-alt"></i>
+                        </button>
+
+                        <button
                           onClick={() => handleDeleteClick(op)}
                           className="w-9 h-9 inline-flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
                           title="Excluir oportunidade"
@@ -536,6 +753,34 @@ export default function OportunidadeList() {
                     Excluir
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Download em Lote */}
+      {isDownloadModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-[#2a2a2a] rounded-xl shadow-2xl max-w-md w-full p-6 fade-in">
+            <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 rounded-full bg-teal-100 dark:bg-teal-900/30">
+              <i className="fas fa-download text-teal-600 dark:text-teal-400 text-2xl animate-bounce"></i>
+            </div>
+            <h3 className="text-lg font-semibold text-center text-gray-800 dark:text-[#eeeeee] mb-2">
+              Baixando Oportunidades
+            </h3>
+            <p className="text-sm text-center text-gray-600 dark:text-[#aaaaaa] mb-6">
+              Aguarde enquanto preparamos o lote de oportunidades para ser baixado.
+            </p>
+            <div className="flex justify-center mb-4">
+              <i className="fas fa-spinner fa-spin text-3xl text-teal-600"></i>
+            </div>
+            <div className="flex justify-center">
+              <button
+                onClick={handleCancelDownload}
+                className="px-6 py-2 bg-gray-200 dark:bg-[#333333] text-gray-700 dark:text-[#dddddd] rounded-lg hover:bg-gray-300 dark:hover:bg-[#444444] transition-colors"
+              >
+                Cancelar
               </button>
             </div>
           </div>

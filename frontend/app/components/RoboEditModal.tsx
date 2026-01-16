@@ -1,11 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '@/config/api'
 import Toast from './Toast'
 import InfoBadge from './InfoBadge'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 
 interface RoboData {
   robo_id?: number
@@ -109,14 +107,14 @@ export default function RoboEditModal({ isOpen, onClose, robo, onSave }: RoboEdi
 
       let response
       if (isEditMode) {
-        response = await axios.put(
-          `${API_DOMAIN}/robos/${formData.robo_id}`,
+        response = await api.put(
+          `/robos/${formData.robo_id}`,
           payload,
           { headers: { 'Authorization': `Bearer ${token}` } }
         )
       } else {
-        response = await axios.post(
-          `${API_DOMAIN}/robos`,
+        response = await api.post(
+          `/robos`,
           {
             ...payload,
             nome: formData.robo_nome || 'Novo Agente',
@@ -167,7 +165,7 @@ export default function RoboEditModal({ isOpen, onClose, robo, onSave }: RoboEdi
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto fade-in">
+      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto fade-in scrollbar-gray">
         {/* Header */}
         <div className="px-6 py-4 border-b dark:border-[#444444] flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-800 dark:text-[#eeeeee]">

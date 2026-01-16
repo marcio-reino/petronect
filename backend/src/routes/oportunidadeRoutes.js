@@ -7,9 +7,13 @@ const { verifyToken, isAdmin } = require('../middlewares/auth');
 router.post('/sync', oportunidadeController.syncOportunidade);
 router.post('/sync-item', oportunidadeController.syncItem);
 router.post('/finish', oportunidadeController.finishOportunidade);
+router.get('/progress/:numero', oportunidadeController.getOpProgress);
 
 // Todas as outras rotas de oportunidades requerem autenticação
 router.use(verifyToken);
+
+// Rota de estatísticas para Dashboard
+router.get('/stats', oportunidadeController.getStats);
 
 // Rotas de listagem e busca
 router.get('/', oportunidadeController.getAllOportunidades);

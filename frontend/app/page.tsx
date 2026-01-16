@@ -117,7 +117,7 @@ export default function LoginPage() {
                 <img src={APP_CONFIG.branding.loginLogo.image} alt="Logo" className="w-72 h-auto" />
               )}
             </div>
-            <p className="text-gray-600 dark:text-[#aaaaaa]">Agentes de automação petronect</p>
+            <p className="text-gray-600 dark:text-[#aaaaaa]">Agentes de Automação Petronect</p>
           </div>
 
           {/* Mensagem de Erro */}
@@ -135,7 +135,6 @@ export default function LoginPage() {
             {/* Campo Email */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-[#cccccc] mb-2">
-                <i className="fas fa-envelope mr-2 text-gray-400 dark:text-[#888888]"></i>
                 Email
               </label>
               <div className="relative">
@@ -156,7 +155,6 @@ export default function LoginPage() {
             {/* Campo Senha */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-[#cccccc] mb-2">
-                <i className="fas fa-lock mr-2 text-gray-400 dark:text-[#888888]"></i>
                 Senha
               </label>
               <div className="relative">
@@ -215,10 +213,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowForgotPassword(true)}
-                className="text-sm font-medium transition"
-                style={{ color: APP_CONFIG.login.link.color }}
-                onMouseEnter={(e) => e.currentTarget.style.color = APP_CONFIG.login.link.hoverColor}
-                onMouseLeave={(e) => e.currentTarget.style.color = APP_CONFIG.login.link.color}
+                className="text-sm font-medium transition text-teal-600 hover:text-teal-700"
                 disabled={isLoading}
               >
                 Esqueci minha senha
@@ -241,21 +236,11 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Footer */}
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600 dark:text-[#aaaaaa]">
-              Não tem uma conta?{' '}
-              <a
-                href="#"
-                className="font-medium transition"
-                style={{ color: APP_CONFIG.login.link.color }}
-                onMouseEnter={(e) => e.currentTarget.style.color = APP_CONFIG.login.link.hoverColor}
-                onMouseLeave={(e) => e.currentTarget.style.color = APP_CONFIG.login.link.color}
-              >
-                Entre em contato
-              </a>
-            </p>
-          </div>
+          {/* Aviso sobre automação */}
+          <p className="mt-6 text-center text-xs text-gray-500 dark:text-[#888888]">
+            Este sistema é uma automação de acesso por contas devidamente registradas no Portal Petronect
+          </p>
+
         </div>
 
         {/* Copyright */}

@@ -160,7 +160,7 @@
   @apply p-6 overflow-y-auto;
   max-height: calc(90vh - 140px);
   scrollbar-width: thin;
-  scrollbar-color: #14b8a6 transparent;
+  scrollbar-color: #9ca3af transparent;
 }
 
 .modal-body-scroll::-webkit-scrollbar {
@@ -172,12 +172,61 @@
 }
 
 .modal-body-scroll::-webkit-scrollbar-thumb {
-  background: #14b8a6;
+  background: #9ca3af;
   border-radius: 3px;
 }
 
 .modal-body-scroll::-webkit-scrollbar-thumb:hover {
-  background: #0d9488;
+  background: #6b7280;
+}
+
+.dark .modal-body-scroll {
+  scrollbar-color: #6b7280 transparent;
+}
+
+.dark .modal-body-scroll::-webkit-scrollbar-thumb {
+  background: #6b7280;
+}
+
+.dark .modal-body-scroll::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Scrollbar estilizada com cor cinza (padrão para modais) */
+.scrollbar-gray {
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af transparent;
+}
+
+.scrollbar-gray::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-gray::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.scrollbar-gray::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.scrollbar-gray::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+.dark .scrollbar-gray {
+  scrollbar-color: #6b7280 transparent;
+}
+
+.dark .scrollbar-gray::-webkit-scrollbar-thumb {
+  background: #6b7280;
+}
+
+.dark .scrollbar-gray::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 /* Scrollbar estilizada com cor primária (teal) */

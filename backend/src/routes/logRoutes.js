@@ -47,11 +47,15 @@ router.get('/system', verifyToken, async (req, res) => {
 
     const [logs] = await promisePool.query(query, params);
 
-    // Parse JSON fields
+    // Parse JSON fields (se ainda for string, caso contrário já é objeto)
     const parsedLogs = logs.map(log => ({
       ...log,
-      log_old_data: log.log_old_data ? JSON.parse(log.log_old_data) : null,
-      log_new_data: log.log_new_data ? JSON.parse(log.log_new_data) : null,
+      log_old_data: log.log_old_data
+        ? (typeof log.log_old_data === 'string' ? JSON.parse(log.log_old_data) : log.log_old_data)
+        : null,
+      log_new_data: log.log_new_data
+        ? (typeof log.log_new_data === 'string' ? JSON.parse(log.log_new_data) : log.log_new_data)
+        : null,
     }));
 
     res.json({

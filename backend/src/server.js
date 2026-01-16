@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const { testConnection } = require('./config/database');
 const routes = require('./routes');
+const { cleanupHistoricoInterno } = require('./controllers/roboController');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -86,6 +87,21 @@ const startServer = async () => {
       console.log(`\n🚀 Servidor rodando na porta ${PORT}`);
       console.log(`📍 URL: http://localhost:${PORT}`);
       console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}\n`);
+
+      // Scheduler de limpeza de histórico (executa a cada 6 horas)
+      const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // 6 horas em ms
+      const HISTORICO_LIMITE = parseInt(process.env.HISTORICO_LIMITE) || 500;
+
+      setInterval(async () => {
+        console.log('[Scheduler] Executando limpeza de histórico...');
+        await cleanupHistoricoInterno(HISTORICO_LIMITE);
+      }, CLEANUP_INTERVAL);
+
+      // Executar limpeza inicial após 1 minuto do servidor iniciar
+      setTimeout(async () => {
+        console.log('[Scheduler] Executando limpeza inicial de histórico...');
+        await cleanupHistoricoInterno(HISTORICO_LIMITE);
+      }, 60000);
     });
 
   } catch (error) {

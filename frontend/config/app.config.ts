@@ -14,11 +14,11 @@ export const APP_CONFIG = {
   // INFORMACOES DO SISTEMA
   // ============================================
   system: {
-    name: 'Sistema Modelo',
+    name: 'Agente Petronect',
     fullName: 'Sistema Modelo - Base para Novos Projetos',
-    version: '1.0.0',
+    version: process.env.NEXT_PUBLIC_SYSTEM_VERSION || '1.0.0',
     year: 2025,
-    company: 'Sua Empresa',
+    company: 'Mach-9 Tecnologia',
   },
 
   // ============================================
@@ -115,8 +115,8 @@ export const APP_CONFIG = {
     // Avatar/Icone do Usuario
     userAvatar: {
       background: {
-        from: '#3b82f6',
-        to: '#1d4ed8',
+        from: '#6b7280',
+        to: '#4b5563',
       },
       text: '#ffffff',
       borderRadius: '9999px',
@@ -184,6 +184,7 @@ export const APP_CONFIG = {
 
     userMenu: {
       profile: 'Meu Perfil',
+      plan: 'Plano',
       settings: 'Configuracoes',
       logout: 'Sair',
     },

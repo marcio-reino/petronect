@@ -1,4 +1,5 @@
 const { promisePool } = require('../config/database');
+const { logSystemActivity, getClientIp, getUserAgent } = require('../utils/logger');
 
 // Listar todas as oportunidades com filtros
 exports.getAllOportunidades = async (req, res) => {
@@ -41,15 +42,18 @@ exports.getAllOportunidades = async (req, res) => {
       params.push(`%${descricao}%`);
     }
 
-    // Filtro por data início
-    if (dataInicio) {
-      query += ` AND opt_datainicio >= ?`;
+    // Filtro por datas
+    if (dataInicio && dataFim) {
+      // Ambas as datas: retorna OPs no período
+      query += ` AND opt_datainicio >= ? AND opt_datafim <= ?`;
+      params.push(dataInicio, dataFim);
+    } else if (dataInicio) {
+      // Apenas data início: retorna OPs com data início na data informada
+      query += ` AND DATE(opt_datainicio) = ?`;
       params.push(dataInicio);
-    }
-
-    // Filtro por data fim
-    if (dataFim) {
-      query += ` AND opt_datafim <= ?`;
+    } else if (dataFim) {
+      // Apenas data fim: retorna OPs com data fim na data informada
+      query += ` AND DATE(opt_datafim) = ?`;
       params.push(dataFim);
     }
 
@@ -85,12 +89,14 @@ exports.getAllOportunidades = async (req, res) => {
       countQuery += ` AND opt_descricao LIKE ?`;
       countParams.push(`%${descricao}%`);
     }
-    if (dataInicio) {
-      countQuery += ` AND opt_datainicio >= ?`;
+    if (dataInicio && dataFim) {
+      countQuery += ` AND opt_datainicio >= ? AND opt_datafim <= ?`;
+      countParams.push(dataInicio, dataFim);
+    } else if (dataInicio) {
+      countQuery += ` AND DATE(opt_datainicio) = ?`;
       countParams.push(dataInicio);
-    }
-    if (dataFim) {
-      countQuery += ` AND opt_datafim <= ?`;
+    } else if (dataFim) {
+      countQuery += ` AND DATE(opt_datafim) = ?`;
       countParams.push(dataFim);
     }
     if (status !== undefined && status !== '') {
@@ -174,8 +180,11 @@ exports.getOportunidadeItens = async (req, res) => {
         optitem_idop,
         optitem_item,
         optitem_descricao,
+        optitem_descricao_completa,
         optitem_quantidade,
         optitem_unidade,
+        optitem_produto_id,
+        optitem_produto_familia,
         optitem_obs,
         optitem_dataresgate,
         optitem_robo,
@@ -355,8 +364,12 @@ exports.deleteOportunidade = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verificar se oportunidade existe
-    const [existing] = await promisePool.query('SELECT opt_id FROM tb_oportunidades WHERE opt_id = ?', [id]);
+    // Buscar dados completos da oportunidade antes de deletar (para o log)
+    const [existing] = await promisePool.query(`
+      SELECT opt_id, opt_numero, opt_descricao, opt_datainicio, opt_datafim, opt_totalitens, opt_status
+      FROM tb_oportunidades WHERE opt_id = ?
+    `, [id]);
+
     if (existing.length === 0) {
       return res.status(404).json({
         success: false,
@@ -364,8 +377,53 @@ exports.deleteOportunidade = async (req, res) => {
       });
     }
 
+    const oportunidade = existing[0];
+
+    // Buscar nome do usuário para o log (req.user.id vem do JWT)
+    let userName = 'Usuário';
+    if (req.user?.id) {
+      const [userResult] = await promisePool.query(
+        'SELECT user_name FROM tb_user WHERE user_id = ?',
+        [req.user.id]
+      );
+      if (userResult.length > 0) {
+        userName = userResult[0].user_name;
+      }
+    }
+
+    // Contar itens que serão deletados
+    const [itensCount] = await promisePool.query(
+      'SELECT COUNT(*) as total FROM tb_oportunidades_itens WHERE optitem_idop = ?',
+      [id]
+    );
+    const totalItensExcluidos = itensCount[0].total;
+
     // Os itens serão deletados automaticamente pelo ON DELETE CASCADE
     await promisePool.query('DELETE FROM tb_oportunidades WHERE opt_id = ?', [id]);
+
+    // Registrar log de exclusão
+    await logSystemActivity({
+      userId: req.user?.id || null,
+      userName: userName,
+      action: 'DELETE',
+      module: 'oportunidades',
+      entityType: 'oportunidade',
+      entityId: id,
+      description: `Oportunidade ${oportunidade.opt_numero} excluída (${oportunidade.opt_descricao || 'sem descrição'}) - ${totalItensExcluidos} itens removidos`,
+      oldData: {
+        opt_id: oportunidade.opt_id,
+        opt_numero: oportunidade.opt_numero,
+        opt_descricao: oportunidade.opt_descricao,
+        opt_datainicio: oportunidade.opt_datainicio,
+        opt_datafim: oportunidade.opt_datafim,
+        opt_totalitens: oportunidade.opt_totalitens,
+        opt_status: oportunidade.opt_status,
+        itens_excluidos: totalItensExcluidos
+      },
+      newData: null,
+      ipAddress: getClientIp(req),
+      userAgent: getUserAgent(req)
+    });
 
     res.json({
       success: true,
@@ -469,8 +527,11 @@ exports.syncItem = async (req, res) => {
       opNumero,
       itemNumero,
       descricao,
+      descricaoCompleta,
       quantidade,
       unidade,
+      produtoId,
+      produtoFamilia,
       bottag
     } = req.body;
 
@@ -509,17 +570,18 @@ exports.syncItem = async (req, res) => {
       itemId = existingItem[0].optitem_id;
       await promisePool.query(`
         UPDATE tb_oportunidades_itens
-        SET optitem_descricao = ?, optitem_quantidade = ?, optitem_unidade = ?,
+        SET optitem_descricao = ?, optitem_descricao_completa = ?, optitem_quantidade = ?, optitem_unidade = ?,
+            optitem_produto_id = ?, optitem_produto_familia = ?,
             optitem_dataresgate = NOW(), optitem_robo = ?
         WHERE optitem_id = ?
-      `, [descricao, quantidade, unidade, bottag, itemId]);
+      `, [descricao, descricaoCompleta || null, quantidade, unidade, produtoId || null, produtoFamilia || null, bottag, itemId]);
     } else {
       // Criar novo item
       const [result] = await promisePool.query(`
         INSERT INTO tb_oportunidades_itens
-        (optitem_idop, optitem_item, optitem_descricao, optitem_quantidade, optitem_unidade, optitem_dataresgate, optitem_robo)
-        VALUES (?, ?, ?, ?, ?, NOW(), ?)
-      `, [optId, itemNumero, descricao, quantidade, unidade, bottag]);
+        (optitem_idop, optitem_item, optitem_descricao, optitem_descricao_completa, optitem_quantidade, optitem_unidade, optitem_produto_id, optitem_produto_familia, optitem_dataresgate, optitem_robo)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)
+      `, [optId, itemNumero, descricao, descricaoCompleta || null, quantidade, unidade, produtoId || null, produtoFamilia || null, bottag]);
       itemId = result.insertId;
     }
 
@@ -574,6 +636,132 @@ exports.finishOportunidade = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao finalizar oportunidade',
+      error: error.message
+    });
+  }
+};
+
+// Estatísticas de oportunidades para o Dashboard
+exports.getStats = async (req, res) => {
+  try {
+    // Oportunidades baixadas nas últimas 24 horas
+    const [ultimas24h] = await promisePool.query(`
+      SELECT COUNT(*) as total
+      FROM tb_oportunidades
+      WHERE opt_datainicio >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+    `);
+
+    // Oportunidades baixadas no mês atual
+    const [mesAtual] = await promisePool.query(`
+      SELECT COUNT(*) as total
+      FROM tb_oportunidades
+      WHERE MONTH(opt_datainicio) = MONTH(CURRENT_DATE())
+        AND YEAR(opt_datainicio) = YEAR(CURRENT_DATE())
+    `);
+
+    // Oportunidades baixadas no mês anterior
+    const [mesAnterior] = await promisePool.query(`
+      SELECT COUNT(*) as total
+      FROM tb_oportunidades
+      WHERE MONTH(opt_datainicio) = MONTH(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH))
+        AND YEAR(opt_datainicio) = YEAR(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH))
+    `);
+
+    const totalUltimas24h = ultimas24h[0].total || 0;
+    const totalMesAtual = mesAtual[0].total || 0;
+    const totalMesAnterior = mesAnterior[0].total || 0;
+
+    // Calcular percentual de variação
+    let percentualVariacao = 0;
+    if (totalMesAnterior > 0) {
+      percentualVariacao = ((totalMesAtual - totalMesAnterior) / totalMesAnterior) * 100;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ultimas24h: totalUltimas24h,
+        mesAtual: totalMesAtual,
+        mesAnterior: totalMesAnterior,
+        percentualVariacao: percentualVariacao
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar estatísticas:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar estatísticas',
+      error: error.message
+    });
+  }
+};
+
+// Buscar progresso de uma OP (último item baixado)
+exports.getOpProgress = async (req, res) => {
+  try {
+    const { numero } = req.params;
+
+    if (!numero) {
+      return res.status(400).json({
+        success: false,
+        message: 'Número da oportunidade é obrigatório'
+      });
+    }
+
+    // Buscar a oportunidade
+    const [op] = await promisePool.query(
+      'SELECT opt_id, opt_numero, opt_totalitens, opt_status FROM tb_oportunidades WHERE opt_numero = ?',
+      [numero]
+    );
+
+    if (op.length === 0) {
+      return res.json({
+        success: true,
+        exists: false,
+        lastItem: 0,
+        totalItens: 0,
+        status: null
+      });
+    }
+
+    const optId = op[0].opt_id;
+    const totalItens = op[0].opt_totalitens || 0;
+    const status = op[0].opt_status;
+
+    // Buscar o último item baixado (maior número de item)
+    const [lastItem] = await promisePool.query(`
+      SELECT optitem_item
+      FROM tb_oportunidades_itens
+      WHERE optitem_idop = ?
+      ORDER BY CAST(optitem_item AS UNSIGNED) DESC
+      LIMIT 1
+    `, [optId]);
+
+    const lastItemNum = lastItem.length > 0 ? parseInt(lastItem[0].optitem_item) : 0;
+
+    // Contar quantos itens já foram baixados
+    const [countResult] = await promisePool.query(
+      'SELECT COUNT(*) as total FROM tb_oportunidades_itens WHERE optitem_idop = ?',
+      [optId]
+    );
+    const itensBaixados = countResult[0].total;
+
+    res.json({
+      success: true,
+      exists: true,
+      lastItem: lastItemNum,
+      itensBaixados,
+      totalItens,
+      status,
+      isComplete: status === 1
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar progresso da OP:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar progresso',
       error: error.message
     });
   }

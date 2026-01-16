@@ -1,10 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '@/config/api'
 import { APP_CONFIG } from '@/config/app.config'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 
 interface UserData {
   name: string
@@ -63,7 +61,7 @@ export default function UserCreateModal({ isOpen, onClose, onSave }: UserCreateM
     const fetchRoles = async () => {
       try {
         const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-        const response = await axios.get(`${API_DOMAIN}/users/roles`, {
+        const response = await api.get(`/users/roles`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -99,8 +97,8 @@ export default function UserCreateModal({ isOpen, onClose, onSave }: UserCreateM
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
 
       // Criar usuário no backend
-      const response = await axios.post(
-        `${API_DOMAIN}/users`,
+      const response = await api.post(
+        `/users`,
         {
           name: formData.name,
           email: formData.email,
@@ -161,7 +159,7 @@ export default function UserCreateModal({ isOpen, onClose, onSave }: UserCreateM
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto fade-in">
+      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto fade-in scrollbar-gray">
         {/* Header */}
         <div
           className="px-6 py-4 border-b dark:border-[#444444] flex items-center justify-between"

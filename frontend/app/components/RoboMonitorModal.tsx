@@ -1,10 +1,8 @@
 'use client'
 
 import { useEffect, useCallback, useState, useRef } from 'react'
-import axios from 'axios'
+import api from '@/config/api'
 import { APP_CONFIG } from '../../config/app.config'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 
 interface Agente {
   robo_id: number
@@ -49,7 +47,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
   const [screenshotError, setScreenshotError] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [historico, setHistorico] = useState<HistoricoItem[]>([])
-  const [historicoLimit, setHistoricoLimit] = useState(25)
+  const [historicoLimit, setHistoricoLimit] = useState(50)
   const [processo, setProcesso] = useState<ProcessoInfo | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
@@ -82,7 +80,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
     }
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.get(`${API_DOMAIN}/robos?limit=100`, {
+      const res = await api.get(`/robos?limit=100`, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
@@ -108,7 +106,8 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
       const timestamp = new Date().getTime()
-      const url = `${API_DOMAIN}/robos/${agenteId}/screenshot?t=${timestamp}`
+      const baseUrl = APP_CONFIG.api.baseUrl
+      const url = `${baseUrl}/robos/${agenteId}/screenshot?t=${timestamp}`
 
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` }
@@ -139,7 +138,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
 
       // Primeiro, verificar se há novos registros
-      const checkRes = await axios.get(`${API_DOMAIN}/robos/${agenteId}/historico?limit=1`, {
+      const checkRes = await api.get(`/robos/${agenteId}/historico?limit=1`, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
@@ -148,7 +147,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
 
         // Só buscar lista completa se houver novos registros ou for forceUpdate
         if (forceUpdate || latestId !== lastHistoricoIdRef.current) {
-          const res = await axios.get(`${API_DOMAIN}/robos/${agenteId}/historico?limit=50`, {
+          const res = await api.get(`/robos/${agenteId}/historico?limit=150`, {
             headers: { Authorization: `Bearer ${token}` }
           })
 
@@ -171,7 +170,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
   const fetchProcesso = async (agenteId: number) => {
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.get(`${API_DOMAIN}/robos/${agenteId}/processo`, {
+      const res = await api.get(`/robos/${agenteId}/processo`, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
@@ -187,7 +186,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
   const checkVerificationStatus = async (agenteId: number) => {
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.get(`${API_DOMAIN}/robos/${agenteId}/verification-status`, {
+      const res = await api.get(`/robos/${agenteId}/verification-status`, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
@@ -217,8 +216,8 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
   const cancelVerificationRequest = async (agenteId: number) => {
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      await axios.post(
-        `${API_DOMAIN}/robos/${agenteId}/cancel-verification`,
+      await api.post(
+        `/robos/${agenteId}/cancel-verification`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -246,8 +245,8 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
     setVerificationLoading(true)
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.post(
-        `${API_DOMAIN}/robos/${selectedAgente.robo_id}/verification-code`,
+      const res = await api.post(
+        `/robos/${selectedAgente.robo_id}/verification-code`,
         { code: verificationCode.trim() },
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -276,9 +275,12 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
     }
 
     // SSE é rota pública (EventSource não suporta headers customizados)
-    const sseUrl = `${API_DOMAIN}/robos/${agenteId}/events`
+    // Usar URL completa do backend (API_BASE sem /api no final)
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+    const backendUrl = apiBaseUrl.replace('/api', '')
+    const sseUrl = `${backendUrl}/api/robos/${agenteId}/events`
 
-    console.log(`[Monitor] Conectando ao SSE para agente ${agenteId}`)
+    console.log(`[Monitor] Conectando ao SSE para agente ${agenteId}: ${sseUrl}`)
 
     const eventSource = new EventSource(sseUrl)
     eventSourceRef.current = eventSource
@@ -474,7 +476,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
       setShowVerificationModal(false)
       showVerificationModalRef.current = false
       setVerificationCode('')
-      setHistoricoLimit(25)
+      setHistoricoLimit(50)
 
       // Scroll para o topo do histórico
       if (historicoContainerRef.current) {
@@ -487,7 +489,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
       console.log('[Monitor] Nenhum agente selecionado, parando polling')
       stopPolling()
       setHistorico([])
-      setHistoricoLimit(25)
+      setHistoricoLimit(50)
       setProcesso(null)
       setScreenshotUrl(null)
     }
@@ -536,8 +538,8 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
     setActionLoading(true)
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.post(
-        `${API_DOMAIN}/robos/${selectedAgente.robo_id}/start`,
+      const res = await api.post(
+        `/robos/${selectedAgente.robo_id}/start`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -576,8 +578,8 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
     setActionLoading(true)
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
-      const res = await axios.post(
-        `${API_DOMAIN}/robos/${selectedAgente.robo_id}/stop`,
+      const res = await api.post(
+        `/robos/${selectedAgente.robo_id}/stop`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -623,7 +625,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
   return (
     <div className="fixed inset-0 bg-black/50 dark:bg-black/80 z-50 flex flex-col">
       {/* Estilos customizados para scrollbar */}
-      <style jsx>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         .teal-scrollbar::-webkit-scrollbar {
           width: 8px;
         }
@@ -641,7 +643,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
         .dark .teal-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
-      `}</style>
+      ` }} />
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-[#333333]">
         <div className="flex items-center gap-3">
@@ -714,6 +716,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
       <div className="flex-1 p-6 overflow-y-auto bg-gray-100 dark:bg-transparent">
         <div className="max-w-7xl mx-auto">
           {selectedAgente ? (
+            <>
             <div className="flex gap-6">
               {/* Area da Imagem - 60% do tamanho original (1400x900 -> 840x540) */}
               <div className="flex-shrink-0">
@@ -731,12 +734,22 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
                       src={screenshotUrl}
                       alt="Screenshot do agente"
                       className="w-[840px] h-[540px] object-cover"
+                      style={{ opacity: 0.5 }}
                       onError={() => setScreenshotError(true)}
                     />
                   ) : (
                     <div className="w-[840px] h-[540px] bg-gray-100 dark:bg-[#252525] flex flex-col items-center justify-center">
-                      <i className="fas fa-image text-gray-300 dark:text-gray-600 text-6xl mb-4"></i>
-                      <p className="text-gray-400 dark:text-gray-500 text-sm">Aguardando captura de tela...</p>
+                      {APP_CONFIG.branding.loginLogo.type === 'image' ? (
+                        <img
+                          src={APP_CONFIG.branding.loginLogo.image}
+                          alt="Logo"
+                          className="w-64 h-auto mb-4"
+                          style={{ opacity: 0.3 }}
+                        />
+                      ) : (
+                        <i className={`fas ${APP_CONFIG.branding.loginLogo.icon} text-gray-300 dark:text-gray-600 text-6xl mb-4`}></i>
+                      )}
+                      <p className="text-gray-400 dark:text-gray-500 text-sm">Aguardando real time...</p>
                       <p className="text-gray-300 dark:text-gray-600 text-xs mt-1">Agente: {selectedAgente.robo_nome}</p>
                     </div>
                   )}
@@ -764,13 +777,13 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
                 )}
               </div>
 
-              {/* Historico de Acoes */}
+              {/* Histórico de Ações */}
               <div className="flex-1 flex flex-col min-w-[350px]">
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-lg border border-gray-200 dark:border-[#333333] flex flex-col shadow-sm flex-1">
+                <div className="bg-white dark:bg-[#1a1a1a] rounded-lg border border-gray-200 dark:border-[#333333] flex flex-col shadow-sm flex-1 relative">
                   <div className="px-4 py-2 border-b border-gray-200 dark:border-[#333333] flex items-center justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">
                       <i className="fas fa-history mr-2"></i>
-                      Historico de Acoes
+                      Histórico de Ações
                     </span>
                     <span className="text-xs text-gray-400 dark:text-gray-500">
                       {Math.min(historicoLimit, historico.length)} de {historico.length} registros
@@ -780,12 +793,14 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
                     {historico.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center py-10">
                         <i className="fas fa-inbox text-gray-300 dark:text-gray-600 text-3xl mb-2"></i>
-                        <p className="text-gray-400 dark:text-gray-500 text-sm">Nenhuma acao registrada</p>
+                        <p className="text-gray-400 dark:text-gray-500 text-sm">Nenhuma ação registrada</p>
                       </div>
                     ) : (
                       <>
                         {historico.slice(0, historicoLimit).map((item) => {
                           const { data, hora } = formatDateTime(item.hist_datacriacao)
+                          const isProcessandoOP = item.hist_mensagem?.startsWith('Processando OP:')
+                          const isErro = item.hist_mensagem?.toLowerCase().includes('erro') || item.hist_mensagem?.includes('Não foi possivel realizar o login')
                           return (
                             <div
                               key={item.hist_id}
@@ -795,7 +810,13 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
                                 <span>{data}</span>
                                 <span>{hora}</span>
                               </div>
-                              <p className="text-sm text-gray-700 dark:text-gray-300">{item.hist_mensagem}</p>
+                              <p className={`text-sm ${
+                                isErro
+                                  ? 'text-red-600 dark:text-red-400 font-medium'
+                                  : isProcessandoOP
+                                    ? 'text-green-700 dark:text-green-400 font-medium'
+                                    : 'text-gray-700 dark:text-gray-300'
+                              }`}>{item.hist_mensagem}</p>
                             </div>
                           )
                         })}
@@ -811,52 +832,67 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
                       </>
                     )}
                   </div>
-                </div>
-
-                {/* Botoes de Controle do Agente */}
-                <div className="flex gap-2 mt-3 items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${isRunning ? 'text-teal-600 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                      {isRunning ? 'Ligado' : 'Desligado'}
-                    </span>
-                    {processo && processo.proc_status === 'running' && (
-                      <span className="text-xs text-gray-500 dark:text-gray-500">
-                        ({processo.proc_op_numero ? `OP ${processo.proc_op_numero}` : 'Modo data'})
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    {isRunning ? (
-                      <button
-                        onClick={stopBot}
-                        disabled={actionLoading}
-                        className="w-9 h-9 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center justify-center"
-                        title="Parar agente"
-                      >
-                        {actionLoading ? (
-                          <i className="fas fa-spinner fa-spin text-sm"></i>
-                        ) : (
-                          <i className="fas fa-stop text-sm"></i>
-                        )}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={startBot}
-                        disabled={actionLoading}
-                        className="w-9 h-9 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center justify-center"
-                        title="Iniciar agente"
-                      >
-                        {actionLoading ? (
-                          <i className="fas fa-spinner fa-spin text-sm"></i>
-                        ) : (
-                          <i className="fas fa-play text-sm"></i>
-                        )}
-                      </button>
-                    )}
-                  </div>
+                  {/* Botão flutuante para subir ao topo */}
+                  {historico.length > 0 && (
+                    <button
+                      onClick={() => {
+                        if (historicoContainerRef.current) {
+                          historicoContainerRef.current.scrollTop = 0
+                        }
+                      }}
+                      className="absolute bottom-4 right-4 w-8 h-8 bg-teal-600 hover:bg-teal-700 text-white rounded-full shadow-lg flex items-center justify-center transition-colors z-10"
+                      title="Voltar ao topo"
+                    >
+                      <i className="fas fa-arrow-up text-xs"></i>
+                    </button>
+                  )}
                 </div>
               </div>
+
             </div>
+            {/* Botoes de Controle do Agente */}
+            <div className="flex gap-2 mt-3 items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-medium ${isRunning ? 'text-teal-600 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                  {isRunning ? 'Ligado' : 'Desligado'}
+                </span>
+                {processo && processo.proc_status === 'running' && (
+                  <span className="text-xs text-gray-500 dark:text-gray-500">
+                    ({processo.proc_op_numero ? `OP ${processo.proc_op_numero}` : 'Modo data'})
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {isRunning ? (
+                  <button
+                    onClick={stopBot}
+                    disabled={actionLoading}
+                    className="w-9 h-9 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center justify-center"
+                    title="Parar agente"
+                  >
+                    {actionLoading ? (
+                      <i className="fas fa-spinner fa-spin text-sm"></i>
+                    ) : (
+                      <i className="fas fa-stop text-sm"></i>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={startBot}
+                    disabled={actionLoading}
+                    className="w-9 h-9 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center justify-center"
+                    title="Iniciar agente"
+                  >
+                    {actionLoading ? (
+                      <i className="fas fa-spinner fa-spin text-sm"></i>
+                    ) : (
+                      <i className="fas fa-play text-sm"></i>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center mt-20 text-center">
               <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-[#333333] flex items-center justify-center mb-4">

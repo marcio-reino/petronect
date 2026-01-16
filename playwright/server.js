@@ -21,8 +21,10 @@ const express = require('express');
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
+const { PDFExtract } = require('pdf.js-extract');
 
 const app = express();
+
 const PORT = process.env.PORT || 3003;
 
 app.use(express.json({ limit: '50mb' }));
@@ -38,6 +40,13 @@ if (!fs.existsSync(SCREENSHOTS_DIR)) {
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 }
 console.log(`[PlaywrightService] Screenshots dir: ${SCREENSHOTS_DIR}`);
+
+// Diretório de PDFs - pasta pdf_op no mesmo nível de screenshots
+const PDF_DIR = path.join(__dirname, 'pdf_op');
+if (!fs.existsSync(PDF_DIR)) {
+  fs.mkdirSync(PDF_DIR, { recursive: true });
+}
+console.log(`[PlaywrightService] PDF dir: ${PDF_DIR}`);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -97,8 +106,10 @@ app.post('/browser/launch', async (req, res) => {
       ]
     });
 
-    // Criar um único contexto para todas as páginas (abas)
-    const context = await browser.newContext();
+    // Criar um único contexto para todas as páginas (abas) com suporte a downloads
+    const context = await browser.newContext({
+      acceptDownloads: true
+    });
 
     const browserId = ++browserIdCounter;
 
@@ -106,6 +117,7 @@ app.post('/browser/launch', async (req, res) => {
       browser,
       context,  // Contexto compartilhado
       pages: new Map(),
+      downloads: new Map(),  // Armazenar downloads pendentes
       createdAt: new Date()
     });
 
@@ -456,6 +468,321 @@ app.post('/browser/:browserId/page/:pageId/screenshot', async (req, res) => {
   }
 });
 
+// Salvar PDF da página
+app.post('/browser/:browserId/page/:pageId/save-pdf', async (req, res) => {
+  try {
+    const { browserId, pageId } = req.params;
+    const { filename } = req.body;
+
+    const page = getPage(parseInt(browserId), parseInt(pageId));
+    if (!page) {
+      return res.status(404).json({ success: false, error: 'Página não encontrada' });
+    }
+
+    const pdfPath = path.join(PDF_DIR, `${filename}.pdf`);
+    await page.pdf({ path: pdfPath, format: 'A4' });
+
+    console.log(`[PlaywrightService] PDF salvo: ${pdfPath}`);
+    res.json({ success: true, path: pdfPath });
+  } catch (error) {
+    console.error('[PlaywrightService] Erro ao salvar PDF:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Salvar PDF de um frame específico
+app.post('/browser/:browserId/page/:pageId/frame-pdf', async (req, res) => {
+  try {
+    const { browserId, pageId } = req.params;
+    const { filename, frameName } = req.body;
+
+    const page = getPage(parseInt(browserId), parseInt(pageId));
+    if (!page) {
+      return res.status(404).json({ success: false, error: 'Página não encontrada' });
+    }
+
+    // Capturar o conteúdo HTML do frame
+    const frame = await page.frame({ name: frameName });
+    if (!frame) {
+      return res.status(404).json({ success: false, error: 'Frame não encontrado' });
+    }
+
+    // Criar uma nova página com o conteúdo do frame para gerar PDF
+    const browserData = browsers.get(parseInt(browserId));
+    if (!browserData) {
+      return res.status(404).json({ success: false, error: 'Browser não encontrado' });
+    }
+
+    const frameContent = await frame.content();
+    const tempPage = await browserData.context.newPage();
+    await tempPage.setContent(frameContent, { waitUntil: 'networkidle' });
+
+    const pdfPath = path.join(PDF_DIR, `${filename}.pdf`);
+    await tempPage.pdf({ path: pdfPath, format: 'A4', printBackground: true });
+    await tempPage.close();
+
+    console.log(`[PlaywrightService] PDF do frame salvo: ${pdfPath}`);
+    res.json({ success: true, path: pdfPath });
+  } catch (error) {
+    console.error('[PlaywrightService] Erro ao salvar PDF do frame:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Capturar download real (PDF ou qualquer arquivo)
+app.post('/browser/:browserId/page/:pageId/capture-download', async (req, res) => {
+  try {
+    const { browserId, pageId } = req.params;
+    const { filename, selector, frameName, timeout = 60000 } = req.body;
+
+    const browserData = browsers.get(parseInt(browserId));
+    if (!browserData) {
+      return res.status(404).json({ success: false, error: 'Browser não encontrado' });
+    }
+
+    const page = getPage(parseInt(browserId), parseInt(pageId));
+    if (!page) {
+      return res.status(404).json({ success: false, error: 'Página não encontrada' });
+    }
+
+    console.log(`[PlaywrightService] Iniciando captura de download...`);
+    console.log(`[PlaywrightService] Selector: ${selector}`);
+    console.log(`[PlaywrightService] Frame: ${frameName || 'principal'}`);
+
+    const finalFilename = filename || 'download.pdf';
+    const savePath = path.join(PDF_DIR, finalFilename.endsWith('.pdf') ? finalFilename : `${finalFilename}.pdf`);
+
+    // Usar page.on('download') como listener
+    let downloadCompleted = false;
+    let downloadError = null;
+
+    const downloadHandler = async (download) => {
+      try {
+        console.log(`[PlaywrightService] Download detectado na PAGE: ${download.suggestedFilename()}`);
+        await download.saveAs(savePath);
+        console.log(`[PlaywrightService] Download salvo: ${savePath}`);
+        downloadCompleted = true;
+      } catch (err) {
+        console.error(`[PlaywrightService] Erro ao salvar download: ${err.message}`);
+        downloadError = err.message;
+      }
+    };
+
+    // Listener no contexto também (alguns downloads são capturados aqui)
+    const contextDownloadHandler = async (download) => {
+      try {
+        console.log(`[PlaywrightService] Download detectado no CONTEXT: ${download.suggestedFilename()}`);
+        if (!downloadCompleted) {
+          await download.saveAs(savePath);
+          console.log(`[PlaywrightService] Download salvo via context: ${savePath}`);
+          downloadCompleted = true;
+        }
+      } catch (err) {
+        console.error(`[PlaywrightService] Erro ao salvar download (context): ${err.message}`);
+        if (!downloadError) downloadError = err.message;
+      }
+    };
+
+    // Registrar os listeners ANTES de clicar
+    page.on('download', downloadHandler);
+    browserData.context.on('download', contextDownloadHandler);
+
+    // Clicar no elemento que dispara o download
+    if (frameName) {
+      const frame = page.frame({ name: frameName });
+      if (!frame) {
+        page.off('download', downloadHandler);
+        browserData.context.off('download', contextDownloadHandler);
+        return res.status(404).json({ success: false, error: 'Frame não encontrado' });
+      }
+      console.log(`[PlaywrightService] Clicando no elemento dentro do frame ${frameName}...`);
+      await frame.click(selector);
+    } else {
+      console.log(`[PlaywrightService] Clicando no elemento...`);
+      await page.click(selector);
+    }
+
+    // Aguardar o download completar (polling)
+    console.log(`[PlaywrightService] Aguardando download completar...`);
+    const startTime = Date.now();
+    while (!downloadCompleted && !downloadError && (Date.now() - startTime) < timeout) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Remover os listeners
+    page.off('download', downloadHandler);
+    browserData.context.off('download', contextDownloadHandler);
+
+    if (downloadError) {
+      return res.json({ success: false, error: downloadError });
+    }
+
+    if (!downloadCompleted) {
+      console.log(`[PlaywrightService] Timeout aguardando download`);
+      return res.json({ success: false, error: 'Timeout aguardando download' });
+    }
+
+    // Verificar se o arquivo foi salvo
+    const fileExists = fs.existsSync(savePath);
+    const fileSize = fileExists ? fs.statSync(savePath).size : 0;
+    console.log(`[PlaywrightService] Arquivo existe: ${fileExists}, Tamanho: ${fileSize} bytes`);
+
+    res.json({
+      success: true,
+      path: savePath,
+      size: fileSize,
+      originalFilename: finalFilename
+    });
+  } catch (error) {
+    console.error('[PlaywrightService] Erro ao capturar download:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Extrair dados de PDF da Petronect
+app.post('/pdf/extract', async (req, res) => {
+  try {
+    const { filename } = req.body;
+
+    if (!filename) {
+      return res.status(400).json({ success: false, error: 'Filename é obrigatório' });
+    }
+
+    const pdfPath = path.join(PDF_DIR, filename);
+
+    if (!fs.existsSync(pdfPath)) {
+      return res.status(404).json({ success: false, error: 'Arquivo PDF não encontrado' });
+    }
+
+    console.log(`[PlaywrightService] Extraindo dados do PDF: ${pdfPath}`);
+
+    // Ler o PDF
+    const pdfExtract = new PDFExtract();
+    const data = await pdfExtract.extract(pdfPath, {});
+
+    // Juntar todo o texto de todas as páginas
+    let text = '';
+    for (const page of data.pages) {
+      for (const item of page.content) {
+        if (item.str) {
+          text += item.str + ' ';
+        }
+      }
+      text += '\n';
+    }
+
+    // Extrair número da oportunidade
+    const opMatch = text.match(/Número da Oportunidade\s*(\d+)/);
+    const numeroOp = opMatch ? opMatch[1] : null;
+
+    // Extrair nome da oportunidade
+    const nomeMatch = text.match(/Nome da Oportunidade\s*([^\n]+)/);
+    let nomeOp = nomeMatch ? nomeMatch[1].trim() : null;
+    // Limpar o nome (pegar só até "Data da publicação")
+    if (nomeOp && nomeOp.includes('Data da publicação')) {
+      nomeOp = nomeOp.split('Data da publicação')[0].trim();
+    }
+
+    // Extrair todas as descrições longas dos itens
+    const descricoesLongas = [];
+    const regex = /Descrição longa do item\s*([^]*?)(?=Declarações envolvidas|Dados do Item \d+|$)/gi;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      let descricao = match[1].trim();
+      descricao = descricao.replace(/\s+/g, ' ').trim();
+      if (descricao && descricao.length > 10) {
+        descricoesLongas.push(descricao);
+      }
+    }
+
+    // Se não encontrou com o regex acima, tentar outra abordagem
+    if (descricoesLongas.length === 0) {
+      const lines = text.split('\n');
+      let captureNext = false;
+      let currentDesc = '';
+
+      for (const line of lines) {
+        if (line.includes('Descrição longa do item')) {
+          captureNext = true;
+          const parts = line.split('Descrição longa do item');
+          if (parts[1] && parts[1].trim()) {
+            currentDesc = parts[1].trim();
+          }
+          continue;
+        }
+
+        if (captureNext) {
+          if (line.includes('Declarações') || line.includes('Dados do Item') || line.match(/^\d+\s+[A-Z]/)) {
+            if (currentDesc) {
+              descricoesLongas.push(currentDesc.trim());
+              currentDesc = '';
+            }
+            captureNext = false;
+          } else {
+            currentDesc += ' ' + line.trim();
+          }
+        }
+      }
+
+      if (currentDesc) {
+        descricoesLongas.push(currentDesc.trim());
+      }
+    }
+
+    // Montar resultado
+    const resultado = {
+      arquivo: filename,
+      numeroOportunidade: numeroOp,
+      nomeOportunidade: nomeOp,
+      dataExtracao: new Date().toISOString(),
+      itens: descricoesLongas.map((desc, idx) => ({
+        item: idx + 1,
+        descricaoLonga: desc
+      })),
+      textoCompleto: text
+    };
+
+    // Salvar arquivo TXT com os dados extraídos
+    const txtFileName = filename.replace('.pdf', '_descricao.txt');
+    const txtPath = path.join(PDF_DIR, txtFileName);
+
+    let txtContent = `========================================\n`;
+    txtContent += `EXTRAÇÃO DE DADOS - PETRONECT\n`;
+    txtContent += `========================================\n\n`;
+    txtContent += `Arquivo: ${resultado.arquivo}\n`;
+    txtContent += `Número da Oportunidade: ${resultado.numeroOportunidade}\n`;
+    txtContent += `Nome: ${resultado.nomeOportunidade}\n`;
+    txtContent += `Data da Extração: ${new Date().toLocaleString('pt-BR')}\n\n`;
+    txtContent += `----------------------------------------\n`;
+    txtContent += `DESCRIÇÕES LONGAS DOS ITENS\n`;
+    txtContent += `----------------------------------------\n\n`;
+
+    if (resultado.itens.length === 0) {
+      txtContent += `Nenhuma descrição longa encontrada.\n`;
+    } else {
+      resultado.itens.forEach(item => {
+        txtContent += `Item ${item.item}:\n`;
+        txtContent += `${item.descricaoLonga}\n\n`;
+      });
+    }
+
+    fs.writeFileSync(txtPath, txtContent, 'utf8');
+
+    console.log(`[PlaywrightService] Dados extraídos e salvos em: ${txtPath}`);
+
+    res.json({
+      success: true,
+      data: resultado,
+      txtPath: txtPath
+    });
+
+  } catch (error) {
+    console.error('[PlaywrightService] Erro ao extrair PDF:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Executar JavaScript na página
 app.post('/browser/:browserId/page/:pageId/evaluate', async (req, res) => {
   try {
@@ -510,6 +837,14 @@ app.post('/browser/:browserId/page/:pageId/frame', async (req, res) => {
         break;
       case 'waitForSelector':
         await frame.waitForSelector(selector, options || {});
+        break;
+      case 'inputValue':
+        const inputElement = await frame.$(selector);
+        result = inputElement ? await inputElement.inputValue() : null;
+        break;
+      case 'getAttribute':
+        const attrElement = await frame.$(selector);
+        result = attrElement ? await attrElement.getAttribute(value) : null;
         break;
       default:
         return res.status(400).json({ success: false, error: 'Ação não suportada' });
@@ -611,6 +946,184 @@ app.post('/browser/:browserId/page/:pageId/locator-click', async (req, res) => {
     }
   } catch (error) {
     console.error('[PlaywrightService] Erro ao clicar locator:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Buscar textarea em todos os iframes (até 5 níveis)
+app.post('/browser/:browserId/page/:pageId/find-textarea', async (req, res) => {
+  try {
+    const { browserId, pageId } = req.params;
+    const { selector, startFrame } = req.body;
+
+    const page = getPage(parseInt(browserId), parseInt(pageId));
+    if (!page) {
+      return res.status(404).json({ success: false, error: 'Página não encontrada' });
+    }
+
+    console.log(`[PlaywrightService] Buscando textarea: ${selector}`);
+
+    // Função recursiva para buscar em todos os frames
+    async function findInFrames(frameOrPage, depth = 0, path = 'main') {
+      if (depth > 5) return null; // Limite de profundidade
+
+      try {
+        // Tentar encontrar o elemento neste frame
+        const element = await frameOrPage.$(selector);
+        if (element) {
+          const value = await element.inputValue();
+          console.log(`[PlaywrightService] Textarea encontrado em: ${path} (profundidade ${depth})`);
+          return { value, path, depth };
+        }
+      } catch (e) {
+        // Elemento não encontrado neste frame, continuar buscando
+      }
+
+      // Buscar em todos os frames filhos
+      const frames = frameOrPage.frames ? frameOrPage.frames() : [];
+      for (let i = 0; i < frames.length; i++) {
+        const childFrame = frames[i];
+        const frameName = childFrame.name() || `frame_${i}`;
+        const result = await findInFrames(childFrame, depth + 1, `${path} > ${frameName}`);
+        if (result) return result;
+      }
+
+      return null;
+    }
+
+    // Se especificou um frame inicial, começar por ele
+    let startingPoint = page;
+    if (startFrame) {
+      const frame = page.frame({ name: startFrame });
+      if (frame) {
+        startingPoint = frame;
+        console.log(`[PlaywrightService] Iniciando busca no frame: ${startFrame}`);
+      }
+    }
+
+    const result = await findInFrames(startingPoint);
+
+    if (result) {
+      res.json({
+        success: true,
+        result: result.value,
+        framePath: result.path,
+        depth: result.depth
+      });
+    } else {
+      console.log(`[PlaywrightService] Textarea não encontrado em nenhum frame`);
+      res.json({ success: false, error: 'Textarea não encontrado em nenhum iframe' });
+    }
+  } catch (error) {
+    console.error('[PlaywrightService] Erro ao buscar textarea:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Buscar textarea no iframe URLSPW por role
+app.post('/browser/:browserId/page/:pageId/get-urlspw-textarea', async (req, res) => {
+  try {
+    const { browserId, pageId } = req.params;
+    const { iframeName, textboxName } = req.body;
+
+    const page = getPage(parseInt(browserId), parseInt(pageId));
+    if (!page) {
+      return res.status(404).json({ success: false, error: 'Página não encontrada' });
+    }
+
+    // Nome do iframe pode variar: URLSPW-0, URLSPW-1, etc
+    const frameName = iframeName || 'URLSPW-0';
+    const textName = textboxName || 'Textos de Item';
+
+    console.log(`[PlaywrightService] Buscando textarea no iframe: ${frameName}, textbox: ${textName}`);
+
+    try {
+      // Usar locator para acessar o iframe e o textbox por role
+      const textbox = page.locator(`iframe[name="${frameName}"]`).contentFrame().getByRole('textbox', { name: textName });
+
+      // Verificar se existe
+      const count = await textbox.count();
+      if (count === 0) {
+        // Tentar outros nomes de iframe (URLSPW-1, URLSPW-2, etc)
+        for (let i = 1; i <= 5; i++) {
+          const altFrameName = `URLSPW-${i}`;
+          console.log(`[PlaywrightService] Tentando iframe alternativo: ${altFrameName}`);
+          const altTextbox = page.locator(`iframe[name="${altFrameName}"]`).contentFrame().getByRole('textbox', { name: textName });
+          const altCount = await altTextbox.count();
+          if (altCount > 0) {
+            const value = await altTextbox.inputValue();
+            console.log(`[PlaywrightService] Textarea encontrado no iframe: ${altFrameName}`);
+            return res.json({ success: true, result: value, iframe: altFrameName });
+          }
+        }
+        return res.json({ success: false, error: 'Textarea não encontrado em nenhum iframe URLSPW' });
+      }
+
+      const value = await textbox.inputValue();
+      console.log(`[PlaywrightService] Textarea encontrado, valor com ${value.length} caracteres`);
+
+      res.json({ success: true, result: value, iframe: frameName });
+    } catch (e) {
+      console.log(`[PlaywrightService] Erro ao acessar textarea: ${e.message}`);
+      res.json({ success: false, error: e.message });
+    }
+  } catch (error) {
+    console.error('[PlaywrightService] Erro ao buscar textarea URLSPW:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Listar todos os iframes da página (debug)
+app.post('/browser/:browserId/page/:pageId/list-frames', async (req, res) => {
+  try {
+    const { browserId, pageId } = req.params;
+    const { startFrame } = req.body;
+
+    const page = getPage(parseInt(browserId), parseInt(pageId));
+    if (!page) {
+      return res.status(404).json({ success: false, error: 'Página não encontrada' });
+    }
+
+    const frameList = [];
+
+    // Função recursiva para listar frames
+    function listFrames(frameOrPage, depth = 0, path = 'main') {
+      if (depth > 5) return;
+
+      const frames = frameOrPage.frames ? frameOrPage.frames() : [];
+      for (let i = 0; i < frames.length; i++) {
+        const frame = frames[i];
+        const frameName = frame.name() || `unnamed_${i}`;
+        const frameUrl = frame.url();
+        const framePath = `${path} > ${frameName}`;
+
+        frameList.push({
+          name: frameName,
+          path: framePath,
+          url: frameUrl,
+          depth: depth + 1
+        });
+
+        listFrames(frame, depth + 1, framePath);
+      }
+    }
+
+    let startingPoint = page;
+    if (startFrame) {
+      const frame = page.frame({ name: startFrame });
+      if (frame) {
+        startingPoint = frame;
+      }
+    }
+
+    listFrames(startingPoint);
+
+    console.log(`[PlaywrightService] Frames encontrados: ${frameList.length}`);
+    frameList.forEach(f => console.log(`  - ${f.path} (${f.name})`));
+
+    res.json({ success: true, frames: frameList });
+  } catch (error) {
+    console.error('[PlaywrightService] Erro ao listar frames:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });

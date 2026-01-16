@@ -1,10 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '@/config/api'
 import { APP_CONFIG } from '@/config/app.config'
-
-const API_DOMAIN = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 
 interface RoleData {
   role_id: number
@@ -93,8 +91,8 @@ export default function UserRolePermissionsModal({ isOpen, onClose, role, onSave
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
 
-      await axios.put(
-        `${API_DOMAIN}/users/roles/${role.role_id}`,
+      await api.put(
+        `/users/roles/${role.role_id}`,
         {
           name: roleName,
           description: roleDescription,
@@ -126,8 +124,8 @@ export default function UserRolePermissionsModal({ isOpen, onClose, role, onSave
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken')
 
-      await axios.put(
-        `${API_DOMAIN}/users/roles/${role.role_id}`,
+      await api.put(
+        `/users/roles/${role.role_id}`,
         {
           name: roleName,
           description: roleDescription,
@@ -191,7 +189,7 @@ export default function UserRolePermissionsModal({ isOpen, onClose, role, onSave
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto fade-in">
+      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto fade-in scrollbar-gray">
         {/* Header */}
         <div
           className="px-6 py-4 border-b border-gray-200 dark:border-[#444444] flex items-center justify-between sticky top-0 bg-white dark:bg-[#2a2a2a] z-10"
