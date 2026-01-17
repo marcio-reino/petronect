@@ -8,6 +8,7 @@ interface OportunidadesStats {
   mesAtual: number
   mesAnterior: number
   percentualVariacao: number
+  totalJaBaixadas: number
 }
 
 interface AgenteAtivo {
@@ -33,7 +34,8 @@ export default function DashboardPage() {
     ultimas24h: 0,
     mesAtual: 0,
     mesAnterior: 0,
-    percentualVariacao: 0
+    percentualVariacao: 0,
+    totalJaBaixadas: 0
   })
   const [loading, setLoading] = useState(true)
 
@@ -193,12 +195,12 @@ export default function DashboardPage() {
                   <i className="fas fa-spinner fa-spin text-gray-400 text-2xl"></i>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-5">
                   {/* Últimas 24 horas */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
-                        <i className="fas fa-clock text-blue-500 text-xl"></i>
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gray-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+                        <i className="fas fa-clock text-gray-500 dark:text-blue-500 text-xl"></i>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Últimas 24h</p>
@@ -214,9 +216,9 @@ export default function DashboardPage() {
 
                   {/* Este Mês */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
-                        <i className="fas fa-calendar-alt text-green-500 text-xl"></i>
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gray-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
+                        <i className="fas fa-calendar-alt text-gray-500 dark:text-green-500 text-xl"></i>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Este Mês</p>
@@ -235,14 +237,32 @@ export default function DashboardPage() {
                     )}
                   </div>
 
+                  {/* Divisor */}
+                  <div className="border-t border-gray-100 dark:border-[#333333]"></div>
+
+                  {/* Total já baixadas */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gray-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
+                        <i className="fas fa-database text-gray-500 dark:text-purple-500 text-xl"></i>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Total já baixadas</p>
+                        <p className="text-2xl font-bold text-gray-800 dark:text-white">
+                          {formatNumber(stats.totalJaBaixadas)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Mês Anterior (referência) */}
                   {stats.mesAnterior > 0 && (
                     <div className="bg-gray-50 dark:bg-[#252525] rounded-lg p-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
                           Mês anterior
                         </span>
-                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        <span className="text-base font-medium text-gray-600 dark:text-gray-300">
                           {formatNumber(stats.mesAnterior)}
                         </span>
                       </div>
@@ -252,15 +272,6 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Footer do Card */}
-            <div className="px-6 py-3 bg-gray-50 dark:bg-[#252525] border-t border-gray-100 dark:border-[#333333]">
-              <div className="flex items-center justify-end">
-                <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
-                  <i className="fas fa-sync-alt fa-spin text-[10px]"></i>
-                  Atualização automática
-                </span>
-              </div>
-            </div>
           </div>
 
           {/* Card: Agentes */}

@@ -2,6 +2,7 @@ const { promisePool } = require('../config/database');
 const botManager = require('../services/botManager');
 const fs = require('fs');
 const path = require('path');
+const { logSystemActivity, getClientIp, getUserAgent } = require('../utils/logger');
 
 // Armazena códigos de verificação pendentes por robo_id
 const pendingVerificationCodes = new Map();
@@ -362,9 +363,9 @@ exports.deleteRobo = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verificar se o robô existe
+    // Verificar se o robô existe e obter dados para o log
     const [existing] = await promisePool.query(
-      'SELECT robo_id FROM tb_robo WHERE robo_id = ?',
+      'SELECT * FROM tb_robo WHERE robo_id = ?',
       [id]
     );
 
@@ -375,11 +376,62 @@ exports.deleteRobo = async (req, res) => {
       });
     }
 
+    const robo = existing[0];
+
+    // Verificar se o robô está em execução e parar
+    if (botManager.isBotRunning(parseInt(id))) {
+      botManager.stopBot(parseInt(id));
+    }
+
+    // Excluir oportunidades específicas associadas
+    await promisePool.query('DELETE FROM tb_oportunidades_especificas WHERE opesp_robo_id = ?', [id]);
+
+    // Excluir histórico do robô
+    await promisePool.query('DELETE FROM tb_robo_historico WHERE hist_robo_id = ?', [id]);
+
+    // Excluir processo do robô
+    await promisePool.query('DELETE FROM tb_robo_processo WHERE proc_robo_id = ?', [id]);
+
+    // Excluir o robô
     await promisePool.query('DELETE FROM tb_robo WHERE robo_id = ?', [id]);
+
+    // Excluir arquivo de screenshot se existir
+    const bottag = robo.robo_nome.replace(/ /g, '_');
+    const screenshotDir = process.env.SCREENSHOTS_DIR || path.join(__dirname, '../../playwright/screenshots');
+    const screenshotPath = path.join(screenshotDir, `${bottag}.png`);
+    try {
+      if (fs.existsSync(screenshotPath)) {
+        fs.unlinkSync(screenshotPath);
+      }
+    } catch (err) {
+      console.error('[DeleteRobo] Erro ao excluir screenshot:', err.message);
+    }
+
+    // Registrar no log do sistema
+    await logSystemActivity({
+      userId: req.user?.id || null,
+      userName: req.user?.name || 'Sistema',
+      action: 'DELETE',
+      module: 'agentes',
+      entityType: 'robo',
+      entityId: robo.robo_id,
+      description: `Agente "${robo.robo_nome}" (ID: ${robo.robo_id}) excluído do sistema`,
+      oldData: {
+        id: robo.robo_id,
+        nome: robo.robo_nome,
+        descricao: robo.robo_dec,
+        tipo: robo.robo_tipo === 0 ? 'OP' : 'RT',
+        usuario: robo.robo_user,
+        status: robo.robo_status === 1 ? 'Ativo' : 'Inativo'
+      },
+      newData: null,
+      ipAddress: getClientIp(req),
+      userAgent: getUserAgent(req)
+    });
 
     res.json({
       success: true,
-      message: 'Robô excluído com sucesso'
+      message: 'Agente excluído com sucesso'
     });
   } catch (error) {
     console.error('Erro ao excluir robô:', error);

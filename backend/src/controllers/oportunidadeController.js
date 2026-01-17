@@ -644,32 +644,44 @@ exports.finishOportunidade = async (req, res) => {
 // Estatísticas de oportunidades para o Dashboard
 exports.getStats = async (req, res) => {
   try {
-    // Oportunidades baixadas nas últimas 24 horas
+    // Oportunidades que tiveram itens resgatados nas últimas 24 horas
+    // Usa a data de resgate dos itens (optitem_dataresgate) para determinar quando foi baixada
     const [ultimas24h] = await promisePool.query(`
-      SELECT COUNT(*) as total
-      FROM tb_oportunidades
-      WHERE opt_datainicio >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+      SELECT COUNT(DISTINCT o.opt_id) as total
+      FROM tb_oportunidades o
+      INNER JOIN tb_oportunidades_itens i ON o.opt_id = i.optitem_idop
+      WHERE i.optitem_dataresgate >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
     `);
 
-    // Oportunidades baixadas no mês atual
+    // Oportunidades que tiveram itens resgatados no mês atual
     const [mesAtual] = await promisePool.query(`
-      SELECT COUNT(*) as total
-      FROM tb_oportunidades
-      WHERE MONTH(opt_datainicio) = MONTH(CURRENT_DATE())
-        AND YEAR(opt_datainicio) = YEAR(CURRENT_DATE())
+      SELECT COUNT(DISTINCT o.opt_id) as total
+      FROM tb_oportunidades o
+      INNER JOIN tb_oportunidades_itens i ON o.opt_id = i.optitem_idop
+      WHERE MONTH(i.optitem_dataresgate) = MONTH(CURRENT_DATE())
+        AND YEAR(i.optitem_dataresgate) = YEAR(CURRENT_DATE())
     `);
 
-    // Oportunidades baixadas no mês anterior
+    // Oportunidades que tiveram itens resgatados no mês anterior
     const [mesAnterior] = await promisePool.query(`
-      SELECT COUNT(*) as total
-      FROM tb_oportunidades
-      WHERE MONTH(opt_datainicio) = MONTH(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH))
-        AND YEAR(opt_datainicio) = YEAR(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH))
+      SELECT COUNT(DISTINCT o.opt_id) as total
+      FROM tb_oportunidades o
+      INNER JOIN tb_oportunidades_itens i ON o.opt_id = i.optitem_idop
+      WHERE MONTH(i.optitem_dataresgate) = MONTH(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH))
+        AND YEAR(i.optitem_dataresgate) = YEAR(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH))
+    `);
+
+    // Total geral de oportunidades já baixadas (que possuem itens)
+    const [totalGeral] = await promisePool.query(`
+      SELECT COUNT(DISTINCT o.opt_id) as total
+      FROM tb_oportunidades o
+      INNER JOIN tb_oportunidades_itens i ON o.opt_id = i.optitem_idop
     `);
 
     const totalUltimas24h = ultimas24h[0].total || 0;
     const totalMesAtual = mesAtual[0].total || 0;
     const totalMesAnterior = mesAnterior[0].total || 0;
+    const totalJaBaixadas = totalGeral[0].total || 0;
 
     // Calcular percentual de variação
     let percentualVariacao = 0;
@@ -683,7 +695,8 @@ exports.getStats = async (req, res) => {
         ultimas24h: totalUltimas24h,
         mesAtual: totalMesAtual,
         mesAnterior: totalMesAnterior,
-        percentualVariacao: percentualVariacao
+        percentualVariacao: percentualVariacao,
+        totalJaBaixadas: totalJaBaixadas
       }
     });
 

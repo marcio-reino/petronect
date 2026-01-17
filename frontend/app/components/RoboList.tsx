@@ -60,6 +60,11 @@ export default function RoboList() {
   const [isOportunidadesModalOpen, setIsOportunidadesModalOpen] = useState(false)
   const [selectedRoboForOportunidades, setSelectedRoboForOportunidades] = useState<RoboRow | null>(null)
 
+  // Modal de confirmação de exclusão
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [roboToDelete, setRoboToDelete] = useState<RoboRow | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
   const fetchRobos = async (page = 1) => {
     setLoading(true)
     setError(null)
@@ -155,6 +160,36 @@ export default function RoboList() {
   const handleCloseOportunidadesModal = () => {
     setIsOportunidadesModalOpen(false)
     setSelectedRoboForOportunidades(null)
+  }
+
+  const handleOpenDeleteModal = (robo: RoboRow) => {
+    setRoboToDelete(robo)
+    setIsDeleteModalOpen(true)
+  }
+
+  const handleCloseDeleteModal = () => {
+    setIsDeleteModalOpen(false)
+    setRoboToDelete(null)
+  }
+
+  const handleDelete = async () => {
+    if (!roboToDelete) return
+
+    setIsDeleting(true)
+    try {
+      const res = await api.delete(`/robos/${roboToDelete.robo_id}`)
+
+      if (res.data && res.data.success) {
+        handleCloseDeleteModal()
+        fetchRobos(pagination.page)
+      } else {
+        alert(res.data?.message || 'Erro ao excluir agente')
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Erro ao excluir agente')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   if (loading && robos.length === 0) {
@@ -406,9 +441,16 @@ export default function RoboList() {
                         <button
                           onClick={() => handleEdit(robo)}
                           className="w-9 h-9 inline-flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors"
-                          title="Editar robô"
+                          title="Editar agente"
                         >
                           <i className="fas fa-edit"></i>
+                        </button>
+                        <button
+                          onClick={() => handleOpenDeleteModal(robo)}
+                          className="w-9 h-9 inline-flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                          title="Excluir agente"
+                        >
+                          <i className="fas fa-trash-alt"></i>
                         </button>
                       </div>
                     </td>
@@ -523,6 +565,84 @@ export default function RoboList() {
         onClose={handleCloseOportunidadesModal}
         robo={selectedRoboForOportunidades}
       />
+
+      {/* Modal de Confirmação de Exclusão */}
+      {isDeleteModalOpen && roboToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Overlay */}
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={handleCloseDeleteModal}
+          />
+
+          {/* Modal */}
+          <div className="relative bg-white dark:bg-[#2a2a2a] rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-[#444444] bg-red-50 dark:bg-red-900/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                  <i className="fas fa-exclamation-triangle text-red-600 dark:text-red-400"></i>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                    Excluir Agente
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Esta ação não pode ser desfeita
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5">
+              <p className="text-gray-700 dark:text-gray-300 mb-4">
+                Tem certeza que deseja excluir o agente <strong className="text-gray-900 dark:text-white">{roboToDelete.robo_nome}</strong>?
+              </p>
+              <div className="bg-gray-50 dark:bg-[#333333] rounded-lg p-4 text-sm">
+                <p className="text-gray-600 dark:text-gray-400 mb-2">
+                  <i className="fas fa-info-circle mr-2 text-gray-400"></i>
+                  Ao excluir este agente, os seguintes dados serão removidos:
+                </p>
+                <ul className="list-disc list-inside text-gray-500 dark:text-gray-400 space-y-1 ml-6">
+                  <li>Histórico de ações do agente</li>
+                  <li>Oportunidades específicas cadastradas</li>
+                  <li>Processo em andamento (se houver)</li>
+                  <li>Screenshots associados</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-[#444444] bg-gray-50 dark:bg-[#333333] flex justify-end gap-3">
+              <button
+                onClick={handleCloseDeleteModal}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-[#444444] border border-gray-300 dark:border-[#555555] rounded-lg hover:bg-gray-50 dark:hover:bg-[#555555] transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin"></i>
+                    Excluindo...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-trash-alt"></i>
+                    Excluir Agente
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
