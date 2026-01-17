@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import DatePicker, { registerLocale } from 'react-datepicker'
-import { ptBR } from 'date-fns/locale'
+import { ptBR } from 'date-fns/locale/pt-BR'
 import 'react-datepicker/dist/react-datepicker.css'
 import api from '@/config/api'
 
