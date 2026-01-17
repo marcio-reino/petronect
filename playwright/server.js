@@ -30,7 +30,8 @@ const PORT = process.env.PORT || 3003;
 app.use(express.json({ limit: '50mb' }));
 
 // Armazenar browsers e páginas ativos
-const browsers = new Map(); // browserId -> { browser, pages: Map(pageId -> page) }
+const browsers = new Map(); // browserId -> { browser, pages: Map(pageId -> page), bottag }
+const bottagToBrowser = new Map(); // bottag -> browserId (para fechar browser por bottag)
 let browserIdCounter = 0;
 let pageIdCounter = 0;
 
@@ -91,9 +92,25 @@ app.get('/browsers', (req, res) => {
 // Iniciar browser
 app.post('/browser/launch', async (req, res) => {
   try {
-    const { headless = true } = req.body;
+    const { headless = true, bottag } = req.body;
 
-    console.log(`[PlaywrightService] Iniciando browser (headless: ${headless})...`);
+    console.log(`[PlaywrightService] Iniciando browser (headless: ${headless}, bottag: ${bottag || 'N/A'})...`);
+
+    // Se já existe um browser para este bottag, fechar primeiro
+    if (bottag && bottagToBrowser.has(bottag)) {
+      const existingBrowserId = bottagToBrowser.get(bottag);
+      const existingBrowserData = browsers.get(existingBrowserId);
+      if (existingBrowserData) {
+        console.log(`[PlaywrightService] Fechando browser anterior do bot ${bottag} (ID: ${existingBrowserId})`);
+        try {
+          await existingBrowserData.browser.close();
+        } catch (e) {
+          console.log(`[PlaywrightService] Erro ao fechar browser anterior: ${e.message}`);
+        }
+        browsers.delete(existingBrowserId);
+      }
+      bottagToBrowser.delete(bottag);
+    }
 
     const browser = await chromium.launch({
       headless: headless === true || headless === 'true',
@@ -118,16 +135,26 @@ app.post('/browser/launch', async (req, res) => {
       context,  // Contexto compartilhado
       pages: new Map(),
       downloads: new Map(),  // Armazenar downloads pendentes
+      bottag: bottag || null,  // Armazenar bottag para referência
       createdAt: new Date()
     });
+
+    // Mapear bottag -> browserId para poder fechar por bottag
+    if (bottag) {
+      bottagToBrowser.set(bottag, browserId);
+    }
 
     // Detectar desconexão
     browser.on('disconnected', () => {
       console.log(`[PlaywrightService] Browser ${browserId} desconectado`);
+      const data = browsers.get(browserId);
+      if (data && data.bottag) {
+        bottagToBrowser.delete(data.bottag);
+      }
       browsers.delete(browserId);
     });
 
-    console.log(`[PlaywrightService] Browser ${browserId} iniciado com sucesso`);
+    console.log(`[PlaywrightService] Browser ${browserId} iniciado com sucesso${bottag ? ` (bot: ${bottag})` : ''}`);
 
     res.json({
       success: true,
@@ -140,7 +167,7 @@ app.post('/browser/launch', async (req, res) => {
   }
 });
 
-// Fechar browser
+// Fechar browser por ID
 app.post('/browser/:id/close', async (req, res) => {
   try {
     const browserId = parseInt(req.params.id);
@@ -148,6 +175,11 @@ app.post('/browser/:id/close', async (req, res) => {
 
     if (!browserData) {
       return res.status(404).json({ success: false, error: 'Browser não encontrado' });
+    }
+
+    // Limpar mapeamento bottag se existir
+    if (browserData.bottag) {
+      bottagToBrowser.delete(browserData.bottag);
     }
 
     await browserData.browser.close();
@@ -158,6 +190,36 @@ app.post('/browser/:id/close', async (req, res) => {
     res.json({ success: true, message: 'Browser fechado' });
   } catch (error) {
     console.error('[PlaywrightService] Erro ao fechar browser:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Fechar browser por bottag (usado pelo botManager para forçar fechamento)
+app.post('/browser/close-by-bottag/:bottag', async (req, res) => {
+  try {
+    const { bottag } = req.params;
+
+    if (!bottagToBrowser.has(bottag)) {
+      return res.status(404).json({ success: false, error: `Browser para bot ${bottag} não encontrado` });
+    }
+
+    const browserId = bottagToBrowser.get(bottag);
+    const browserData = browsers.get(browserId);
+
+    if (!browserData) {
+      bottagToBrowser.delete(bottag);
+      return res.status(404).json({ success: false, error: 'Browser não encontrado no mapa' });
+    }
+
+    await browserData.browser.close();
+    browsers.delete(browserId);
+    bottagToBrowser.delete(bottag);
+
+    console.log(`[PlaywrightService] Browser ${browserId} (bot: ${bottag}) fechado via bottag`);
+
+    res.json({ success: true, message: `Browser do bot ${bottag} fechado` });
+  } catch (error) {
+    console.error('[PlaywrightService] Erro ao fechar browser por bottag:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });

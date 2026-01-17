@@ -7,6 +7,7 @@ const { verifyToken, isAdmin } = require('../middlewares/auth');
 router.post('/:id/log', roboController.addLog);
 router.post('/:id/processo', roboController.updateProcesso);
 router.post('/complete-op', roboController.completeOp);
+router.get('/:id/check-queue', roboController.checkQueue);
 router.post('/:id/request-verification', roboController.requestVerificationCode);
 router.get('/:id/check-verification', roboController.checkVerificationCode);
 
@@ -16,6 +17,9 @@ router.get('/:id/events', roboController.subscribeToEvents);
 
 // Todas as outras rotas de robôs requerem autenticação
 router.use(verifyToken);
+
+// Rota do dashboard (deve vir antes de /:id para não conflitar)
+router.get('/dashboard', roboController.getDashboardStats);
 
 // Rotas de listagem e busca
 router.get('/', roboController.getAllRobos);

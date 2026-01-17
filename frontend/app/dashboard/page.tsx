@@ -11,33 +11,22 @@ interface OportunidadesStats {
 }
 
 interface AgenteAtivo {
+  id: number
   nome: string
-  ultimaAcao: string
-  opAtual: string
+  tipo: string
   status: 'working' | 'idle'
+  opAtual: string | null
+  itemAtual: number
+  totalItens: number
+  ultimaAcao: string
+  ultimaAtualizacao: string | null
 }
 
-// Dados simulados de agentes ativos
-const agentesSimulados: AgenteAtivo[] = [
-  {
-    nome: 'Agente OP_01',
-    ultimaAcao: 'Baixando item 45 de 120',
-    opAtual: 'OP-2024-00892',
-    status: 'working'
-  },
-  {
-    nome: 'Agente OP_02',
-    ultimaAcao: 'Extraindo dados do item 12',
-    opAtual: 'OP-2024-00891',
-    status: 'working'
-  },
-  {
-    nome: 'Agente OP_03',
-    ultimaAcao: 'Validando informações',
-    opAtual: 'OP-2024-00890',
-    status: 'working'
-  }
-]
+interface AgentesStats {
+  total: number
+  ativos: number
+  agentes: AgenteAtivo[]
+}
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<OportunidadesStats>({
@@ -50,24 +39,55 @@ export default function DashboardPage() {
 
   // Estados para o card de Agentes
   const [agenteAtualIndex, setAgenteAtualIndex] = useState(0)
-  const [agentesAtivos] = useState<AgenteAtivo[]>(agentesSimulados)
+  const [agentesStats, setAgentesStats] = useState<AgentesStats>({
+    total: 0,
+    ativos: 0,
+    agentes: []
+  })
+  const [agentesLoading, setAgentesLoading] = useState(true)
   const [fadeState, setFadeState] = useState<'in' | 'out'>('in')
   const [progressKey, setProgressKey] = useState(0)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const agentesIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  const oportunidadesIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    fetchOportunidadesStats()
+    fetchOportunidadesStats(true) // Mostrar loading apenas na primeira carga
+    fetchAgentesStats(true) // Mostrar loading apenas na primeira carga
+
+    // Atualizar dados das oportunidades automaticamente a cada 15 segundos
+    oportunidadesIntervalRef.current = setInterval(() => {
+      fetchOportunidadesStats() // Sem loading nas atualizações automáticas
+    }, 15000)
+
+    // Atualizar dados dos agentes automaticamente a cada 5 segundos
+    agentesIntervalRef.current = setInterval(() => {
+      fetchAgentesStats() // Sem loading nas atualizações automáticas
+    }, 5000)
+
+    return () => {
+      if (oportunidadesIntervalRef.current) {
+        clearInterval(oportunidadesIntervalRef.current)
+      }
+      if (agentesIntervalRef.current) {
+        clearInterval(agentesIntervalRef.current)
+      }
+    }
   }, [])
+
+  // Filtrar apenas agentes em trabalho para a rotação
+  const agentesEmTrabalho = agentesStats.agentes.filter(a => a.status === 'working')
 
   // Rotação de agentes a cada 10 segundos
   useEffect(() => {
-    if (agentesAtivos.length > 1) {
+    if (agentesEmTrabalho.length > 1) {
       intervalRef.current = setInterval(() => {
         // Fade out
         setFadeState('out')
 
         setTimeout(() => {
-          setAgenteAtualIndex((prev) => (prev + 1) % agentesAtivos.length)
+          setAgenteAtualIndex((prev) => (prev + 1) % agentesEmTrabalho.length)
           setProgressKey((prev) => prev + 1)
           // Fade in
           setFadeState('in')
@@ -80,10 +100,17 @@ export default function DashboardPage() {
         clearInterval(intervalRef.current)
       }
     }
-  }, [agentesAtivos.length])
+  }, [agentesEmTrabalho.length])
 
-  const fetchOportunidadesStats = async () => {
-    setLoading(true)
+  // Resetar índice quando os agentes mudam
+  useEffect(() => {
+    if (agenteAtualIndex >= agentesEmTrabalho.length) {
+      setAgenteAtualIndex(0)
+    }
+  }, [agentesEmTrabalho.length, agenteAtualIndex])
+
+  const fetchOportunidadesStats = async (showLoading = false) => {
+    if (showLoading) setLoading(true)
     try {
       const res = await api.get('/oportunidades/stats')
 
@@ -92,15 +119,23 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error('Erro ao buscar estatísticas:', error)
-      // Dados mockados para desenvolvimento
-      setStats({
-        ultimas24h: 0,
-        mesAtual: 0,
-        mesAnterior: 0,
-        percentualVariacao: 0
-      })
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
+    }
+  }
+
+  const fetchAgentesStats = async (showLoading = false) => {
+    if (showLoading) setAgentesLoading(true)
+    try {
+      const res = await api.get('/robos/dashboard')
+
+      if (res.data && res.data.success) {
+        setAgentesStats(res.data.data)
+      }
+    } catch (error) {
+      console.error('Erro ao buscar dados dos agentes:', error)
+    } finally {
+      if (showLoading) setAgentesLoading(false)
     }
   }
 
@@ -120,8 +155,8 @@ export default function DashboardPage() {
     return 'fa-minus'
   }
 
-  const agenteAtual = agentesAtivos[agenteAtualIndex]
-  const totalAgentes = agentesAtivos.filter(a => a.status === 'working').length
+  const agenteAtual = agentesEmTrabalho[agenteAtualIndex]
+  const totalAgentes = agentesStats.ativos
 
   return (
     <div className="space-y-8">
@@ -220,13 +255,10 @@ export default function DashboardPage() {
             {/* Footer do Card */}
             <div className="px-6 py-3 bg-gray-50 dark:bg-[#252525] border-t border-gray-100 dark:border-[#333333]">
               <div className="flex items-center justify-end">
-                <button
-                  onClick={fetchOportunidadesStats}
-                  className="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-md transition-colors"
-                >
-                  <i className="fas fa-refresh mr-1"></i>
-                  Atualizar
-                </button>
+                <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                  <i className="fas fa-sync-alt fa-spin text-[10px]"></i>
+                  Atualização automática
+                </span>
               </div>
             </div>
           </div>
@@ -241,15 +273,23 @@ export default function DashboardPage() {
                   <p className="text-xs text-gray-500 dark:text-gray-400">Em trabalho</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-3xl font-bold text-gray-800 dark:text-white">{totalAgentes}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">ativos</p>
+                  <p className="text-3xl font-bold text-gray-800 dark:text-white">
+                    {agentesLoading ? '-' : totalAgentes}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    de {agentesStats.total} agentes
+                  </p>
                 </div>
               </div>
             </div>
 
             {/* Corpo do Card */}
             <div className="p-6">
-              {totalAgentes === 0 ? (
+              {agentesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <i className="fas fa-spinner fa-spin text-gray-400 text-2xl"></i>
+                </div>
+              ) : totalAgentes === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <div className="w-16 h-16 bg-gray-100 dark:bg-[#252525] rounded-full flex items-center justify-center mb-3">
                     <i className="fas fa-robot text-gray-400 dark:text-gray-500 text-2xl"></i>
@@ -276,10 +316,25 @@ export default function DashboardPage() {
 
                   {/* OP Atual */}
                   <div className="bg-gray-50 dark:bg-[#252525] rounded-lg p-3">
-                    <span className="text-xs text-gray-500 dark:text-gray-400">OP em andamento</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">OP em andamento</span>
+                      {agenteAtual?.totalItens > 0 && (
+                        <span className="text-xs text-teal-600 dark:text-teal-400">
+                          Item {agenteAtual.itemAtual} de {agenteAtual.totalItens}
+                        </span>
+                      )}
+                    </div>
                     <p className="font-mono text-sm font-medium text-gray-800 dark:text-white">
-                      {agenteAtual?.opAtual}
+                      {agenteAtual?.opAtual || 'Aguardando OP'}
                     </p>
+                    {agenteAtual?.totalItens > 0 && (
+                      <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                        <div
+                          className="bg-teal-500 h-1.5 rounded-full transition-all duration-300"
+                          style={{ width: `${(agenteAtual.itemAtual / agenteAtual.totalItens) * 100}%` }}
+                        ></div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Última Ação */}
@@ -297,7 +352,7 @@ export default function DashboardPage() {
             <div className="px-6 py-3 bg-gray-50 dark:bg-[#252525] border-t border-gray-100 dark:border-[#333333]">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1">
-                  {agentesAtivos.map((_, index) => (
+                  {agentesEmTrabalho.map((_, index) => (
                     <span
                       key={index}
                       className={`w-2 h-2 rounded-full transition-colors ${
@@ -308,17 +363,23 @@ export default function DashboardPage() {
                     ></span>
                   ))}
                 </div>
+                <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                  <i className="fas fa-sync-alt fa-spin text-[10px]"></i>
+                  Atualização automática
+                </span>
               </div>
-              {/* Barra de progresso */}
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 overflow-hidden">
-                <div
-                  key={progressKey}
-                  className="bg-teal-500 h-1 rounded-full animate-progress-bar"
-                  style={{
-                    animation: 'progressBar 10s linear forwards'
-                  }}
-                ></div>
-              </div>
+              {/* Barra de progresso da rotação */}
+              {agentesEmTrabalho.length > 1 && (
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 overflow-hidden">
+                  <div
+                    key={progressKey}
+                    className="bg-teal-500 h-1 rounded-full animate-progress-bar"
+                    style={{
+                      animation: 'progressBar 10s linear forwards'
+                    }}
+                  ></div>
+                </div>
+              )}
               <style jsx>{`
                 @keyframes progressBar {
                   from { width: 0%; }

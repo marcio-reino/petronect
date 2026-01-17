@@ -17,17 +17,80 @@ export default function LoginPage() {
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [resetEmail, setResetEmail] = useState('')
   const [resetSuccess, setResetSuccess] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
 
   useEffect(() => {
     // Forçar modo escuro no login
     document.documentElement.classList.add('dark')
 
-    // Carregar preferência de "Continuar logado" do localStorage
-    const savedRememberMe = localStorage.getItem('rememberMe')
-    if (savedRememberMe === 'true') {
-      setFormData(prev => ({ ...prev, rememberMe: true }))
+    // Verificar se já está logado com "Continuar logado" ativado
+    const checkAutoLogin = async () => {
+      const savedRememberMe = localStorage.getItem('rememberMe')
+      const accessToken = localStorage.getItem('accessToken')
+      const user = localStorage.getItem('user')
+
+      // Se "Continuar logado" estava ativo e temos token, fazer login automático
+      if (savedRememberMe === 'true' && accessToken && user) {
+        try {
+          // Verificar se o token ainda é válido fazendo uma requisição ao backend
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/verify`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          })
+
+          if (response.ok) {
+            // Token válido, redirecionar para dashboard
+            router.push('/dashboard')
+            return
+          } else {
+            // Token inválido, tentar refresh
+            const refreshToken = localStorage.getItem('refreshToken')
+            if (refreshToken) {
+              const refreshResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh-token`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ refreshToken }),
+              })
+
+              if (refreshResponse.ok) {
+                const refreshData = await refreshResponse.json()
+                localStorage.setItem('accessToken', refreshData.data.accessToken)
+                if (refreshData.data.refreshToken) {
+                  localStorage.setItem('refreshToken', refreshData.data.refreshToken)
+                }
+                router.push('/dashboard')
+                return
+              }
+            }
+            // Refresh falhou, limpar dados
+            localStorage.removeItem('accessToken')
+            localStorage.removeItem('refreshToken')
+            localStorage.removeItem('user')
+            localStorage.removeItem('userId')
+          }
+        } catch (error) {
+          // Erro na verificação, limpar dados
+          localStorage.removeItem('accessToken')
+          localStorage.removeItem('refreshToken')
+          localStorage.removeItem('user')
+          localStorage.removeItem('userId')
+        }
+      }
+
+      // Carregar preferência de "Continuar logado"
+      if (savedRememberMe === 'true') {
+        setFormData(prev => ({ ...prev, rememberMe: true }))
+      }
+
+      setCheckingAuth(false)
     }
-  }, [])
+
+    checkAutoLogin()
+  }, [router])
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -97,6 +160,24 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Mostrar tela de carregamento enquanto verifica autenticação
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-[#00BFA5] to-[#00897B] dark:from-[#1a1a1a] dark:to-[#2a2a2a]">
+        <div className="text-center">
+          {/* Spinner moderno com animação de pulso */}
+          <div className="relative w-16 h-16 mx-auto mb-6">
+            <div className="absolute inset-0 rounded-full border-4 border-white/20"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-white animate-spin"></div>
+            <div className="absolute inset-2 rounded-full border-4 border-transparent border-t-white/60 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.8s' }}></div>
+          </div>
+          <p className="text-white text-lg font-medium">Verificando sessão...</p>
+          <p className="text-white/60 text-sm mt-2">Aguarde um momento</p>
+        </div>
+      </div>
+    )
   }
 
   return (

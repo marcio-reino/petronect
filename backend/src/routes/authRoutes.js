@@ -9,6 +9,7 @@ router.post('/login', authController.login);
 router.post('/refresh-token', authController.refreshToken);
 
 // Rotas protegidas
+router.get('/verify', verifyToken, authController.verifyToken);
 router.post('/logout', verifyToken, authController.logout);
 
 module.exports = router;

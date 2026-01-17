@@ -250,6 +250,28 @@ exports.refreshToken = async (req, res) => {
   }
 };
 
+// Verificar Token (para login automático)
+exports.verifyToken = async (req, res) => {
+  try {
+    // O middleware verifyToken já validou o token
+    // Apenas retornamos sucesso com os dados do usuário
+    res.json({
+      success: true,
+      message: 'Token válido',
+      data: {
+        user: req.user
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro na verificação do token:', error);
+    res.status(401).json({
+      success: false,
+      message: 'Token inválido'
+    });
+  }
+};
+
 // Logout
 exports.logout = async (req, res) => {
   try {

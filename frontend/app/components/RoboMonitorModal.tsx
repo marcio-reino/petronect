@@ -71,6 +71,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
   const currentPollingAgenteIdRef = useRef<number | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
   const historicoContainerRef = useRef<HTMLDivElement | null>(null)
+  const [historicoScrolled, setHistoricoScrolled] = useState(false)
 
   // Buscar todos os agentes
   const fetchAgentes = async (isPolling = false) => {
@@ -721,13 +722,12 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
               {/* Area da Imagem - 60% do tamanho original (1400x900 -> 840x540) */}
               <div className="flex-shrink-0">
                 <div className="bg-white dark:bg-[#1a1a1a] rounded-lg border border-gray-200 dark:border-[#333333] overflow-hidden shadow-sm">
-                  <div className="px-4 py-2 bg-gray-50 dark:bg-[#222222] border-b border-gray-200 dark:border-[#333333] flex items-center justify-between">
+                  <div className="px-4 py-2 bg-gray-50 dark:bg-[#222222] border-b border-gray-200 dark:border-[#333333] flex items-center">
                     <span className="text-sm text-gray-600 dark:text-gray-400">
                       <i className="fas fa-broadcast-tower mr-2"></i>
                       Real Time
                       {isRunning && <span className="ml-2 text-green-500 animate-pulse">LIVE</span>}
                     </span>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">1400 x 900 px</span>
                   </div>
                   {screenshotUrl && !screenshotError ? (
                     <img
@@ -789,7 +789,14 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
                       {Math.min(historicoLimit, historico.length)} de {historico.length} registros
                     </span>
                   </div>
-                  <div ref={historicoContainerRef} className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[480px] teal-scrollbar">
+                  <div
+                    ref={historicoContainerRef}
+                    className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[480px] teal-scrollbar"
+                    onScroll={(e) => {
+                      const target = e.target as HTMLDivElement
+                      setHistoricoScrolled(target.scrollTop > 10)
+                    }}
+                  >
                     {historico.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center py-10">
                         <i className="fas fa-inbox text-gray-300 dark:text-gray-600 text-3xl mb-2"></i>
@@ -838,9 +845,14 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
                       onClick={() => {
                         if (historicoContainerRef.current) {
                           historicoContainerRef.current.scrollTop = 0
+                          setHistoricoScrolled(false)
                         }
                       }}
-                      className="absolute bottom-4 right-4 w-8 h-8 bg-teal-600 hover:bg-teal-700 text-white rounded-full shadow-lg flex items-center justify-center transition-colors z-10"
+                      className={`absolute bottom-4 right-4 w-8 h-8 ${
+                        historicoScrolled
+                          ? 'bg-teal-600 hover:bg-teal-700'
+                          : 'bg-gray-400 hover:bg-gray-500 dark:bg-gray-600 dark:hover:bg-gray-500'
+                      } text-white rounded-full shadow-lg flex items-center justify-center transition-colors z-10`}
                       title="Voltar ao topo"
                     >
                       <i className="fas fa-arrow-up text-xs"></i>

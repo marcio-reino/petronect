@@ -790,6 +790,62 @@ exports.getProcesso = async (req, res) => {
   }
 };
 
+// Retorna dados dos agentes para o dashboard
+exports.getDashboardStats = async (req, res) => {
+  try {
+    // Buscar todos os robôs com seus processos atuais e última atividade do histórico
+    const [agentes] = await promisePool.query(`
+      SELECT
+        r.robo_id,
+        r.robo_nome,
+        r.robo_tipo,
+        r.robo_status,
+        r.robo_ultimaatividade,
+        r.robo_opresgate,
+        p.proc_op_numero,
+        p.proc_item_atual,
+        p.proc_total_itens,
+        p.proc_status,
+        p.proc_ultima_atualizacao,
+        (SELECT hist_mensagem FROM tb_robo_historico WHERE hist_robo_id = r.robo_id ORDER BY hist_datacriacao DESC LIMIT 1) as ultima_mensagem
+      FROM tb_robo r
+      LEFT JOIN tb_robo_processo p ON r.robo_id = p.proc_robo_id
+      ORDER BY r.robo_nome ASC
+    `);
+
+    // Formatar dados para o frontend
+    const agentesFormatados = agentes.map(agente => ({
+      id: agente.robo_id,
+      nome: agente.robo_nome,
+      tipo: agente.robo_tipo === 0 ? 'OP' : 'RT',
+      status: agente.proc_status === 'running' ? 'working' : 'idle',
+      opAtual: agente.proc_op_numero || agente.robo_opresgate || null,
+      itemAtual: agente.proc_item_atual || 0,
+      totalItens: agente.proc_total_itens || 0,
+      ultimaAcao: agente.ultima_mensagem || agente.robo_ultimaatividade || 'Aguardando',
+      ultimaAtualizacao: agente.proc_ultima_atualizacao
+    }));
+
+    // Contar agentes ativos (em trabalho)
+    const agentesAtivos = agentesFormatados.filter(a => a.status === 'working');
+
+    res.json({
+      success: true,
+      data: {
+        total: agentesFormatados.length,
+        ativos: agentesAtivos.length,
+        agentes: agentesFormatados
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar dados do dashboard:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao buscar dados do dashboard'
+    });
+  }
+};
+
 // Busca próxima OP da fila e seta em robo_opresgate
 async function fetchNextOpFromQueue(roboId) {
   // 1. Buscar primeira OP da fila
@@ -1075,6 +1131,70 @@ exports.completeOp = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao completar OP'
+    });
+  }
+};
+
+// =============================================
+// VERIFICAR FILA DE OPS
+// =============================================
+
+// Bot verifica se há OPs na fila para processar
+exports.checkQueue = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const roboId = parseInt(id);
+
+    // Validar ID
+    if (isNaN(roboId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID do robô inválido'
+      });
+    }
+
+    // Buscar próxima OP da fila (sem remover)
+    const [ops] = await promisePool.query(`
+      SELECT opesp_id, opesp_numero
+      FROM tb_oportunidades_especificas
+      WHERE opesp_robo_id = ?
+      ORDER BY opesp_ordem ASC LIMIT 1
+    `, [roboId]);
+
+    if (ops.length > 0) {
+      // Atualizar robo_opresgate com o número da OP
+      await promisePool.query(`
+        UPDATE tb_robo SET robo_opresgate = ? WHERE robo_id = ?
+      `, [ops[0].opesp_numero, roboId]);
+
+      console.log(`[CheckQueue] Robô ${roboId}: OP na fila: ${ops[0].opesp_numero}`);
+
+      res.json({
+        success: true,
+        hasQueue: true,
+        nextOp: ops[0].opesp_numero,
+        message: `Próxima OP da fila: ${ops[0].opesp_numero}`
+      });
+    } else {
+      // Limpar robo_opresgate se não há fila
+      await promisePool.query(`
+        UPDATE tb_robo SET robo_opresgate = NULL WHERE robo_id = ?
+      `, [roboId]);
+
+      console.log(`[CheckQueue] Robô ${roboId}: Fila vazia`);
+
+      res.json({
+        success: true,
+        hasQueue: false,
+        nextOp: null,
+        message: 'Fila vazia, continuar por data'
+      });
+    }
+  } catch (error) {
+    console.error('Erro ao verificar fila:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao verificar fila'
     });
   }
 };

@@ -26,7 +26,7 @@ const senha = config.senha;
 const dataOp = parseInt(config.data) || 1;
 const bottag = config.bottag;
 const statusHoraInicioOrdem = config.ordem || '0'; // 0=crescente, 1=decrescente
-const opResgate = config.opresgate || null;
+let opResgate = config.opresgate || null;
 
 // URLs base
 const API_BASE = process.env.API_BASE || 'http://localhost:5000/api';
@@ -101,7 +101,8 @@ async function pw(endpoint, method = 'POST', body = null) {
 
 // Funções de alto nível para Playwright
 async function launchBrowser() {
-  const result = await pw('/browser/launch', 'POST', { headless: HEADLESS_MODE });
+  // Enviar bottag para o Playwright Service poder associar o browser ao bot
+  const result = await pw('/browser/launch', 'POST', { headless: HEADLESS_MODE, bottag: bottag });
   if (result.success) {
     browserId = result.browserId;
   }
@@ -248,6 +249,22 @@ async function notifyOpCompleted(opNumero) {
     return data.nextOp || null;
   } catch (error) {
     console.error('[notifyOpCompleted] Erro:', error.message);
+    return null;
+  }
+}
+
+async function checkQueueForNextOp() {
+  try {
+    const response = await fetch(`${API_BASE}/robos/${roboId}/check-queue`);
+    const data = await response.json();
+    if (data.success && data.hasQueue) {
+      console.log(`[Bot ${bottag}] Fila verificada: próxima OP ${data.nextOp}`);
+      return data.nextOp;
+    }
+    console.log(`[Bot ${bottag}] Fila verificada: vazia`);
+    return null;
+  } catch (error) {
+    console.error('[checkQueueForNextOp] Erro:', error.message);
     return null;
   }
 }
@@ -750,6 +767,28 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     await SaveLogBot(`Total de [${qtd_ops}] oportunidades...`);
     await UpdateProcesso(opResgate || 'DATA', 0, parseInt(qtd_ops), 'running');
 
+    // Se pesquisa por OP específica e não encontrou (0 resultados), remover da fila
+    if (opResgate && parseInt(qtd_ops) === 0) {
+      console.log(`[Bot ${bottag}] OP específica ${opResgate} não encontrada! Removendo da fila...`);
+      await SaveLogBot(`OP específica ${opResgate} não encontrada! Removendo da fila...`);
+
+      // Notificar conclusão para remover da fila e buscar próxima
+      const nextOp = await notifyOpCompleted(opResgate);
+      if (nextOp) {
+        console.log(`[Bot ${bottag}] Próxima OP da fila: ${nextOp}`);
+        await SaveLogBot(`Próxima OP da fila: ${nextOp}`);
+        opResgate = nextOp;
+      } else {
+        console.log(`[Bot ${bottag}] Fila vazia, operando por data`);
+        await SaveLogBot('Fila vazia, operando por data');
+        opResgate = null;
+      }
+
+      // Continuar o loop para processar a próxima OP
+      await wait(3000);
+      continue;
+    }
+
     // Se pesquisa por data, verificar lista de OPs
     if (!opResgate) {
       const totalOps = parseInt(qtd_ops);
@@ -945,9 +984,13 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
         await wait(2000);
       }
 
+      // Contador de itens processados com sucesso
+      let itensProcessadosComSucesso = progress.itensBaixados || 0;
+
       if (itensRestantes <= 0) {
         console.log(`[Bot ${bottag}] Todos os ${qtd_itens} itens já foram baixados`);
         await SaveLogBot('Todos os itens já foram baixados');
+        itensProcessadosComSucesso = qtd_itens;
       } else {
         console.log(`[Bot ${bottag}] Processando ${itensRestantes} itens restantes (de ${startFromItem} até ${qtd_itens})`);
         await SaveLogBot(`Processando ${itensRestantes} itens restantes`);
@@ -1099,6 +1142,30 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
                 console.log(`[Bot ${bottag}] Fechando modal de Texto do Item...`);
                 await mouseClick(1005, 590);
                 await wait(2000);
+
+                // Capturar ID da Família do Produto via aba "Família do Produto"
+                try {
+                  console.log(`[Bot ${bottag}] Acessando aba Família do Produto...`);
+                  const xpath_aba_familia_produto = '//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[3]/td/div/div/table/tbody/tr[2]/td/div/div/div/span/span[2]/table/tbody/tr[1]/td/table/tbody/tr/td[2]/div/div[4]/div[1]';
+                  await frame('isolatedWorkArea', 'click', xpath_aba_familia_produto);
+                  await wait(3000);
+                  await screenshot(bottag);
+
+                  // Capturar o ID da Família do Produto do input
+                  const xpath_input_familia_produto = '//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[3]/td/div/div/table/tbody/tr[2]/td/div/div/div/span/span[2]/table/tbody/tr[3]/td/div[4]/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr[2]/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr/td[2]/span/input';
+                  const familiaIdResult = await frame('isolatedWorkArea', 'inputValue', xpath_input_familia_produto);
+
+                  if (familiaIdResult.result) {
+                    item_produto_familia = familiaIdResult.result;
+                    console.log(`[Bot ${bottag}] ID FAMILIA:     ${item_produto_familia}`);
+                  } else {
+                    console.log(`[Bot ${bottag}] Aviso: ID Família do Produto não encontrado`);
+                  }
+
+                  await screenshot(bottag);
+                } catch (familiaError) {
+                  console.log(`[Bot ${bottag}] Aviso: Não foi possível capturar ID Família do Produto: ${familiaError.message}`);
+                }
               } catch (notasError) {
                 console.log(`[Bot ${bottag}] Aviso: Não foi possível capturar descrição longa: ${notasError.message}`);
               }
@@ -1115,11 +1182,20 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
             }
 
             // Sincronizar item no banco de dados (com descrição completa, descrição longa, produto ID e família)
-            await syncItem(n_op_, item_id, item_desc, item_desc_longa, item_qtd, item_unidade, item_produto_id, item_produto_familia, item_desc_longa);
+            const syncResult = await syncItem(n_op_, item_id, item_desc, item_desc_longa, item_qtd, item_unidade, item_produto_id, item_produto_familia, item_desc_longa);
+
+            if (syncResult && syncResult.success) {
+              itensProcessadosComSucesso++;
+              console.log(`[Bot ${bottag}] Item ${item_id} sincronizado com sucesso (${itensProcessadosComSucesso}/${qtd_itens})`);
+            } else {
+              console.log(`[Bot ${bottag}] AVISO: Falha ao sincronizar item ${item_id}`);
+              await SaveLogBot(`AVISO: Falha ao sincronizar item ${item_id}`);
+            }
 
             await screenshot(bottag);
           } catch (e) {
             console.log(`[Bot ${bottag}] Erro ao processar item ${itemNum}:`, e.message);
+            await SaveLogBot(`Erro ao processar item ${itemNum}: ${e.message}`);
           }
 
           // Só incrementa id_item para os primeiros 10 itens
@@ -1131,36 +1207,70 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
         }
       }
 
-      // Finalizar OP no banco de dados
-      console.log(`[Bot ${bottag}] Finalizando OP ${n_op_processar}...`);
-      await SaveLogBot(`Finalizando OP ${n_op_processar}...`);
-      await UpdateProcesso(n_op_processar, qtd_itens, qtd_itens, 'completed');
-      await finishOportunidade(n_op_);
+      // Verificar se TODOS os itens foram processados antes de finalizar
+      console.log(`[Bot ${bottag}] Verificação final: ${itensProcessadosComSucesso}/${qtd_itens} itens processados`);
+      await SaveLogBot(`Verificação final: ${itensProcessadosComSucesso}/${qtd_itens} itens processados`);
 
-      // Marcar OP como completa no cache para evitar reprocessamento
-      opStatusCache.set(n_op_processar, true);
-      opStatusCache.set(n_op_, true);
+      if (itensProcessadosComSucesso >= qtd_itens) {
+        // Finalizar OP no banco de dados - TODOS os itens foram processados
+        console.log(`[Bot ${bottag}] Finalizando OP ${n_op_processar}...`);
+        await SaveLogBot(`Finalizando OP ${n_op_processar}...`);
+        await UpdateProcesso(n_op_processar, qtd_itens, qtd_itens, 'completed');
+        await finishOportunidade(n_op_);
 
-      // Notificar conclusão
-      if (opResgate) {
-        const nextOp = await notifyOpCompleted(opResgate);
-        if (nextOp) {
-          console.log(`[Bot ${bottag}] Próxima OP da fila: ${nextOp}`);
-          await SaveLogBot(`Próxima OP da fila: ${nextOp}`);
+        // Marcar OP como completa no cache para evitar reprocessamento
+        opStatusCache.set(n_op_processar, true);
+        opStatusCache.set(n_op_, true);
+
+        console.log(`[Bot ${bottag}] OP ${n_op_processar} finalizada com sucesso! Todos os ${qtd_itens} itens baixados.`);
+        await SaveLogBot(`OP ${n_op_processar} finalizada com sucesso! Todos os ${qtd_itens} itens baixados.`);
+      } else {
+        // NÃO finalizar - ainda há itens pendentes
+        const itensFaltando = qtd_itens - itensProcessadosComSucesso;
+        console.log(`[Bot ${bottag}] OP ${n_op_processar} INCOMPLETA! Faltam ${itensFaltando} itens.`);
+        await SaveLogBot(`OP ${n_op_processar} INCOMPLETA! Faltam ${itensFaltando} itens. Será reprocessada.`);
+        await UpdateProcesso(n_op_processar, itensProcessadosComSucesso, qtd_itens, 'running');
+
+        // NÃO marcar como completa no cache - permitir reprocessamento
+        opStatusCache.set(n_op_processar, false);
+        opStatusCache.set(n_op_, false);
+      }
+
+      // Notificar conclusão apenas se OP foi completada
+      if (itensProcessadosComSucesso >= qtd_itens) {
+        if (opResgate) {
+          // Era uma OP específica - notificar e buscar próxima da fila
+          const nextOp = await notifyOpCompleted(opResgate);
+          if (nextOp) {
+            console.log(`[Bot ${bottag}] Próxima OP da fila: ${nextOp}`);
+            await SaveLogBot(`Próxima OP da fila: ${nextOp}`);
+            // Atualizar opResgate para processar a próxima OP da fila
+            opResgate = nextOp;
+          } else {
+            console.log(`[Bot ${bottag}] Fila vazia, operando por data`);
+            await SaveLogBot('Fila vazia, operando por data');
+            // Limpar opResgate para continuar no modo data
+            opResgate = null;
+          }
         } else {
-          console.log(`[Bot ${bottag}] Fila vazia, operando por data`);
-          await SaveLogBot('Fila vazia, operando por data');
+          // Era uma OP por data - verificar se há OPs na fila antes de continuar
+          console.log(`[Bot ${bottag}] Verificando fila de OPs específicas...`);
+          await SaveLogBot('Verificando fila de OPs específicas...');
+          const queueOp = await checkQueueForNextOp();
+          if (queueOp) {
+            console.log(`[Bot ${bottag}] Encontrada OP na fila: ${queueOp}`);
+            await SaveLogBot(`Encontrada OP na fila: ${queueOp}`);
+            // Atualizar opResgate para processar a OP da fila
+            opResgate = queueOp;
+          }
+          // Se não há fila, opResgate continua null (modo data)
         }
+
+        console.log(`[Bot ${bottag}] OP ${n_op_processar} finalizada! Buscando próxima...`);
+        await SaveLogBot(`OP ${n_op_processar} finalizada! Buscando próxima...`);
       }
 
-      console.log(`[Bot ${bottag}] OP ${n_op_processar} finalizada! Buscando próxima...`);
-      await SaveLogBot(`OP ${n_op_processar} finalizada! Buscando próxima...`);
-
-      // Se era OP específica da fila, parar de processar
-      if (opResgate) {
-        continuarProcessando = false;
-      }
-      // Se era por data, continuar o loop para próxima OP
+      // Continuar o loop para próxima OP (seja da fila ou por data)
       await wait(3000);
     } else {
       console.log(`[Bot ${bottag}] Nenhuma OP pendente para processar`);
@@ -1172,7 +1282,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     // Reiniciar bot após processar todas as OPs ou quando não houver mais pendentes
     console.log(`[Bot ${bottag}] Ciclo completo, reiniciando...`);
-    await SaveLogBot('Ciclo completo, reiniciando bot...');
+    await SaveLogBot('Ciclo completo, reiniciando agente...');
     isStopping = true;
     await closeBrowser();
     process.exit(0);

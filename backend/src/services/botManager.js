@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const path = require('path');
 const { promisePool } = require('../config/database');
 
@@ -10,6 +10,27 @@ const PLAYWRIGHT_DIR = path.join(__dirname, '../../../playwright');
 
 // Script do bot que se comunica com o Playwright Service
 const BOT_SCRIPT = 'bot-runner.js';
+
+// URL do Playwright Service
+const PLAYWRIGHT_SERVICE_URL = process.env.PLAYWRIGHT_BASE || 'http://localhost:3003';
+
+// Fechar browser no Playwright Service por bottag
+async function closeBrowserByBottag(bottag) {
+  try {
+    const response = await fetch(`${PLAYWRIGHT_SERVICE_URL}/browser/close-by-bottag/${bottag}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await response.json();
+    if (data.success) {
+      console.log(`[BotManager] Browser do bot ${bottag} fechado no Playwright Service`);
+    }
+    return data;
+  } catch (error) {
+    console.log(`[BotManager] Aviso: não foi possível fechar browser no Playwright Service: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
 
 // Buscar próxima OP da fila de oportunidades específicas
 async function fetchNextOpFromQueue(roboId) {
@@ -66,10 +87,14 @@ function startBot(robo) {
   console.log(`[BotManager] Comando: node ${args.join(' ')}`);
 
   try {
+    // No Linux, usar detached: true para criar um grupo de processos
+    // Isso permite matar todos os processos filhos com kill(-pid, signal)
+    const isLinux = process.platform !== 'win32';
+
     const proc = spawn('node', args, {
       cwd: PLAYWRIGHT_DIR,
       stdio: ['pipe', 'pipe', 'pipe'],
-      detached: false
+      detached: isLinux // true no Linux para criar grupo de processos
     });
 
     // Capturar saída do processo
@@ -175,6 +200,9 @@ async function stopBot(roboId) {
     // Marcar como sendo parado para evitar reinício
     botInfo.stopping = true;
 
+    // Primeiro, fechar o browser no Playwright Service (isso mata o processo Chromium)
+    await closeBrowserByBottag(bottag);
+
     // Enviar comando de stop via stdin (funciona em Windows e Linux)
     try {
       proc.stdin.write('STOP\n');
@@ -190,16 +218,56 @@ async function stopBot(roboId) {
 
     if (process.platform === 'win32') {
       // No Windows, usar taskkill para matar a árvore de processos
-      const { exec } = require('child_process');
       exec(`taskkill /pid ${proc.pid} /T /F`, (err) => {
         if (err) console.log(`[BotManager] taskkill: ${err.message}`);
       });
     } else {
+      // No Linux, usar kill com -PGID para matar todo o grupo de processos
+      // Primeiro, tentar SIGTERM para encerramento gracioso
       try {
-        proc.kill('SIGKILL');
+        // Tentar matar o grupo de processos (negativo do PID)
+        process.kill(-proc.pid, 'SIGTERM');
+        console.log(`[BotManager] SIGTERM enviado para grupo de processos ${proc.pid}`);
       } catch (e) {
-        console.log(`[BotManager] Erro ao matar processo: ${e.message}`);
+        console.log(`[BotManager] Erro ao enviar SIGTERM para grupo: ${e.message}`);
+        // Fallback: tentar matar processo individual
+        try {
+          proc.kill('SIGTERM');
+        } catch (e2) {
+          console.log(`[BotManager] Erro ao enviar SIGTERM: ${e2.message}`);
+        }
       }
+
+      // Aguardar 2 segundos e forçar SIGKILL se ainda estiver rodando
+      setTimeout(() => {
+        try {
+          // Verificar se o processo ainda existe
+          process.kill(proc.pid, 0);
+          // Se chegou aqui, o processo ainda existe - forçar SIGKILL
+          console.log(`[BotManager] Processo ${proc.pid} ainda ativo, enviando SIGKILL`);
+
+          // Usar pkill para matar todos os processos filhos no Linux
+          exec(`pkill -9 -P ${proc.pid}`, (err) => {
+            if (err && err.code !== 1) {
+              console.log(`[BotManager] pkill filhos: ${err.message}`);
+            }
+          });
+
+          // Matar o processo principal
+          try {
+            process.kill(-proc.pid, 'SIGKILL');
+          } catch (e) {
+            try {
+              proc.kill('SIGKILL');
+            } catch (e2) {
+              console.log(`[BotManager] Erro ao enviar SIGKILL: ${e2.message}`);
+            }
+          }
+        } catch (checkErr) {
+          // Processo já terminou
+          console.log(`[BotManager] Processo ${proc.pid} já encerrado`);
+        }
+      }, 2000);
     }
 
     // Remover do mapa imediatamente

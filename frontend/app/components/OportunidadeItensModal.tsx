@@ -11,6 +11,8 @@ interface OportunidadeItem {
   optitem_descricao_completa: string
   optitem_quantidade: string
   optitem_unidade: string
+  optitem_produto_id: string
+  optitem_produto_familia: string
   optitem_obs: string
   optitem_dataresgate: string
   optitem_robo: string
@@ -167,13 +169,23 @@ export default function OportunidadeItensModal({ isOpen, onClose, oportunidade }
                 Nº {oportunidade.opt_numero}
               </span>
             </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-[#333333] flex items-center justify-center transition"
-              title="Fechar"
-            >
-              <i className="fas fa-times text-gray-500 dark:text-[#aaaaaa]"></i>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={fetchItens}
+                disabled={loading}
+                className="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-[#333333] flex items-center justify-center transition disabled:opacity-50"
+                title="Atualizar lista"
+              >
+                <i className={`fas fa-sync-alt text-gray-500 dark:text-[#aaaaaa] ${loading ? 'fa-spin' : ''}`}></i>
+              </button>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-[#333333] flex items-center justify-center transition"
+                title="Fechar"
+              >
+                <i className="fas fa-times text-gray-500 dark:text-[#aaaaaa]"></i>
+              </button>
+            </div>
           </div>
 
           {/* Info da Oportunidade */}
@@ -249,6 +261,9 @@ export default function OportunidadeItensModal({ isOpen, onClose, oportunidade }
                       Descrição produto
                     </th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-[#cccccc]">
+                      Família
+                    </th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-[#cccccc]">
                       Qtd
                     </th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-[#cccccc]">
@@ -267,6 +282,9 @@ export default function OportunidadeItensModal({ isOpen, onClose, oportunidade }
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 dark:text-[#dddddd]">
                         {item.optitem_descricao}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-[#dddddd]">
+                        {item.optitem_produto_familia || '-'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 dark:text-[#dddddd]">
                         {item.optitem_quantidade}

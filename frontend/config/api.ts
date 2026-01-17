@@ -34,20 +34,25 @@ api.interceptors.response.use(
     return response
   },
   (error) => {
-    // Verificar se é erro de autenticação (401 ou 403)
+    // Verificar se é erro de autenticação (401 ou 403 com mensagem de token)
     if (error.response) {
       const status = error.response.status
       const message = error.response.data?.message || ''
 
-      // Token inválido ou expirado
-      if (
+      // Verificar se é realmente um erro de autenticação/token
+      const isAuthError =
         status === 401 ||
-        status === 403 ||
         message.includes('Token inválido') ||
         message.includes('Token expirado') ||
+        message.includes('token') ||
         message.includes('invalid') ||
-        message.includes('expired')
-      ) {
+        message.includes('expired') ||
+        message.includes('Acesso negado') ||
+        message.includes('não autenticado')
+
+      // 403 só é tratado como erro de auth se a mensagem indicar problema de token
+      // Erros como "Limite de agentes atingido" não devem deslogar o usuário
+      if (isAuthError) {
         // Limpar tokens
         if (typeof window !== 'undefined') {
           localStorage.removeItem('accessToken')
