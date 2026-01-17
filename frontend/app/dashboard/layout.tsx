@@ -7,6 +7,20 @@ import UserMenu from "../components/UserMenu";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import QuickAccessTabs from "../components/QuickAccessTabs";
 
+// Tipagem para itens de submenu
+interface SubMenuItem {
+  label: string;
+  href: string;
+}
+
+// Tipagem para itens do menu principal
+interface MenuItem {
+  icon: string;
+  label: string;
+  href: string;
+  submenu?: SubMenuItem[];
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -16,7 +30,7 @@ export default function DashboardLayout({
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [openSubmenu, setOpenSubmenu] = useState<number | null>(null);
 
-  const menuItems = APP_CONFIG.menu.items;
+  const menuItems = APP_CONFIG.menu.items as MenuItem[];
   const isDashboardHome = pathname === '/dashboard';
 
   return (
@@ -157,7 +171,7 @@ export default function DashboardLayout({
                     {/* Submenu */}
                     {hasSubmenu && isSubmenuOpen && sidebarExpanded && (
                       <div className="ml-6 mb-2">
-                        {item.submenu?.map((subitem: any, subindex) => {
+                        {item.submenu?.map((subitem, subindex) => {
                           const isSubActive =
                             typeof window !== "undefined" &&
                             window.location.pathname === subitem.href;
