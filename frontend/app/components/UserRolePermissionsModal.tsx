@@ -35,45 +35,23 @@ export default function UserRolePermissionsModal({ isOpen, onClose, role, onSave
 
   useEffect(() => {
     if (role && isOpen) {
-      console.log('=== CARREGANDO ROLE ===')
-      console.log('Role completa:', JSON.stringify(role, null, 2))
-      console.log('role_permissions:', role.role_permissions)
-      console.log('Tipo:', typeof role.role_permissions)
-      
       setRoleName(role.role_name)
       setRoleDescription(role.role_description)
-      
+
       if (role.role_permissions) {
         try {
-          const parsed = typeof role.role_permissions === 'string' 
-            ? JSON.parse(role.role_permissions) 
+          const parsed = typeof role.role_permissions === 'string'
+            ? JSON.parse(role.role_permissions)
             : role.role_permissions
-          console.log('Permissões parseadas:', parsed)
           setPermissions(parsed)
         } catch (e) {
-          console.error('ERRO ao parsear:', e)
           setPermissions({})
         }
       } else {
-        console.log('SEM PERMISSÕES - definindo vazio')
         setPermissions({})
       }
     }
   }, [role, isOpen])
-
-  useEffect(() => {
-    console.log('>>> Estado permissions atualizado:', permissions)
-  }, [permissions])
-
-  const handleTogglePermission = (module: string, action: string) => {
-    setPermissions(prev => ({
-      ...prev,
-      [module]: {
-        ...prev[module],
-        [action]: !prev[module]?.[action]
-      }
-    }))
-  }
 
   const handlePermissionChange = async (module: string, action: string, value: boolean) => {
     // Atualizar estado local
@@ -164,15 +142,12 @@ export default function UserRolePermissionsModal({ isOpen, onClose, role, onSave
 
   // Módulos disponíveis
   const modules = [
-    { key: 'dashboard', label: 'Dashboard', actions: ['view'] },
-    { key: 'users', label: 'Usuários', actions: ['view', 'create', 'edit', 'delete'] },
-    { key: 'clients', label: 'Clientes', actions: ['view', 'create', 'edit', 'delete', 'export'] },
-    { key: 'budgets', label: 'Orçamentos', actions: ['view', 'create', 'edit', 'delete', 'approve', 'cancel', 'send'] },
-    { key: 'services', label: 'Serviços', actions: ['view', 'create', 'edit', 'delete'] },
-    { key: 'certificates', label: 'Certificados', actions: ['view', 'create', 'edit', 'delete', 'generate'] },
-    { key: 'finance', label: 'Financeiro', actions: ['view', 'create', 'edit', 'delete', 'approve'] },
-    { key: 'reports', label: 'Relatórios', actions: ['view', 'export'] },
-    { key: 'settings', label: 'Configurações', actions: ['view', 'edit'] },
+    { key: 'dashboard', label: 'Dashboard', icon: 'fa-home', actions: ['view'] },
+    { key: 'oportunidades', label: 'Oportunidades', icon: 'fa-file-alt', actions: ['view', 'create', 'edit', 'delete'] },
+    { key: 'agentes', label: 'Agentes', icon: 'fa-robot', actions: ['view', 'create', 'edit', 'delete'] },
+    { key: 'users', label: 'Usuários', icon: 'fa-users', actions: ['view', 'create', 'edit', 'delete'] },
+    { key: 'logs', label: 'Logs do Sistema', icon: 'fa-history', actions: ['view'] },
+    { key: 'settings', label: 'Configurações', icon: 'fa-cog', actions: ['view', 'edit'] },
   ]
 
   const actionLabels: { [key: string]: string } = {
@@ -189,11 +164,9 @@ export default function UserRolePermissionsModal({ isOpen, onClose, role, onSave
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto fade-in scrollbar-gray">
+      <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl shadow-2xl max-w-4xl w-full h-[500px] overflow-hidden flex flex-col fade-in">
         {/* Header */}
-        <div
-          className="px-6 py-4 border-b border-gray-200 dark:border-[#444444] flex items-center justify-between sticky top-0 bg-white dark:bg-[#2a2a2a] z-10"
-        >
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-[#444444] flex items-center justify-between flex-shrink-0">
           <h2 className="text-xl font-bold text-gray-800 dark:text-[#eeeeee]">Editar Cargo</h2>
           <button
             onClick={handleClose}
@@ -205,8 +178,8 @@ export default function UserRolePermissionsModal({ isOpen, onClose, role, onSave
         </div>
 
         {/* Nav Tabs */}
-        <div className="border-b border-gray-200 dark:border-[#444444] sticky top-[73px] bg-white dark:bg-[#2a2a2a] z-10">
-          <nav className="flex px-6">
+        <div className="border-b border-gray-200 dark:border-[#444444] flex-shrink-0">
+          <nav className="flex px-6 -mb-px">
             <button
               type="button"
               onClick={() => setActiveTab('description')}
@@ -235,154 +208,153 @@ export default function UserRolePermissionsModal({ isOpen, onClose, role, onSave
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSubmit} className="p-6">
-          {/* Mensagem de Erro */}
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg fade-in">
-              <div className="flex items-center">
-                <i className="fas fa-exclamation-circle text-red-500 mr-3"></i>
-                <p className="text-red-700 text-sm">{error}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Mensagem de Sucesso */}
-          {success && (
-            <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-500 rounded-lg fade-in">
-              <div className="flex items-center">
-                <i className="fas fa-check-circle text-green-500 mr-3"></i>
-                <p className="text-green-700 text-sm">Dados atualizados com sucesso!</p>
-              </div>
-            </div>
-          )}
-
-          {/* Tab Content - Descrição */}
-          {activeTab === 'description' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-[#cccccc] mb-2">
-                  <i className="fas fa-tag mr-2 text-gray-400 dark:text-[#888888]"></i>
-                  Nome do Cargo *
-                </label>
-                <input
-                  type="text"
-                  value={roleName}
-                  onChange={(e) => setRoleName(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-[#444444] dark:bg-[#2a2a2a] dark:text-[#eeeeee] rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  required
-                  disabled={isLoading}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-[#cccccc] mb-2">
-                  <i className="fas fa-align-left mr-2 text-gray-400 dark:text-[#888888]"></i>
-                  Descrição *
-                </label>
-                <textarea
-                  value={roleDescription}
-                  onChange={(e) => setRoleDescription(e.target.value)}
-                  rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-[#444444] dark:bg-[#2a2a2a] dark:text-[#eeeeee] rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
-                  required
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Tab Content - Permissões */}
-          {activeTab === 'permissions' && (
-            <div className="space-y-3">
-              {modules.map((module) => (
-                <div
-                  key={module.key}
-                  className="p-4 bg-gradient-to-br from-gray-50 to-white dark:from-[#333333] dark:to-[#2a2a2a] border border-gray-200 dark:border-[#444444] rounded-xl"
-                >
-                  <div className="flex items-center mb-3">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center mr-3 text-white text-sm font-bold"
-                      style={{
-                        background: `linear-gradient(135deg, ${APP_CONFIG.widgets.colors.primary} 0%, ${APP_CONFIG.widgets.colors.secondary} 100%)`,
-                      }}
-                    >
-                      {module.label.charAt(0).toUpperCase()}
-                    </div>
-                    <h3 className="text-sm font-bold text-gray-700 dark:text-[#eeeeee]">{module.label}</h3>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {module.actions.map((action) => {
-                      const isChecked = permissions[module.key]?.[action] === true
-                      console.log(`Switch ${module.key}.${action}:`, {
-                        permissions,
-                        modulePermissions: permissions[module.key],
-                        actionValue: permissions[module.key]?.[action],
-                        isChecked
-                      })
-                      
-                      return (
-                        <label
-                          key={`${module.key}-${action}`}
-                          className="flex items-center justify-between px-3 py-2 bg-white dark:bg-[#2a2a2a] border border-gray-200 dark:border-[#444444] rounded-lg cursor-pointer hover:border-teal-400 transition group"
-                        >
-                          <span className="text-xs text-gray-600 dark:text-[#cccccc] group-hover:text-gray-800 dark:group-hover:text-[#eeeeee]">
-                            {actionLabels[action]}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handlePermissionChange(module.key, action, !isChecked)}
-                            disabled={isLoading}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                              isChecked
-                                ? 'bg-teal-600'
-                                : 'bg-gray-300'
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                                isChecked
-                                  ? 'translate-x-5'
-                                  : 'translate-x-0.5'
-                              }`}
-                            />
-                          </button>
-                        </label>
-                      )
-                    })}
-                  </div>
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-gray">
+            {/* Mensagem de Erro */}
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg fade-in">
+                <div className="flex items-center">
+                  <i className="fas fa-exclamation-circle text-red-500 mr-3"></i>
+                  <p className="text-red-700 text-sm">{error}</p>
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            )}
 
-          {/* Footer Actions */}
-          <div className="flex gap-2 justify-end pt-4 mt-4 border-t border-gray-200 dark:border-[#444444]">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-4 py-2 bg-gray-200 dark:bg-[#333333] text-gray-700 dark:text-[#dddddd] text-sm font-medium rounded-lg hover:bg-gray-300 dark:hover:bg-[#444444] transition-all duration-200"
-              disabled={isLoading}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg transition-all duration-200"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <i className="fas fa-spinner fa-spin mr-2"></i>
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <i className="fas fa-save mr-2"></i>
-                  Salvar
-                </>
-              )}
-            </button>
+            {/* Mensagem de Sucesso */}
+            {success && (
+              <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-500 rounded-lg fade-in">
+                <div className="flex items-center">
+                  <i className="fas fa-check-circle text-green-500 mr-3"></i>
+                  <p className="text-green-700 text-sm">Dados atualizados com sucesso!</p>
+                </div>
+              </div>
+            )}
+
+            {/* Tab Content - Descrição */}
+            {activeTab === 'description' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-[#cccccc] mb-2">
+                    <i className="fas fa-tag mr-2 text-gray-400 dark:text-[#888888]"></i>
+                    Nome do Cargo *
+                  </label>
+                  <input
+                    type="text"
+                    value={roleName}
+                    onChange={(e) => setRoleName(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-[#444444] dark:bg-[#2a2a2a] dark:text-[#eeeeee] rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-[#cccccc] mb-2">
+                    <i className="fas fa-align-left mr-2 text-gray-400 dark:text-[#888888]"></i>
+                    Descrição *
+                  </label>
+                  <textarea
+                    value={roleDescription}
+                    onChange={(e) => setRoleDescription(e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-[#444444] dark:bg-[#2a2a2a] dark:text-[#eeeeee] rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Tab Content - Permissões */}
+            {activeTab === 'permissions' && (
+              <div className="space-y-3">
+                {modules.map((module) => (
+                  <div
+                    key={module.key}
+                    className="p-4 bg-gradient-to-br from-gray-50 to-white dark:from-[#333333] dark:to-[#2a2a2a] border border-gray-200 dark:border-[#444444] rounded-xl"
+                  >
+                    <div className="flex items-center mb-3">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center mr-3 text-white text-sm"
+                        style={{
+                          background: `linear-gradient(135deg, ${APP_CONFIG.widgets.colors.primary} 0%, ${APP_CONFIG.widgets.colors.secondary} 100%)`,
+                        }}
+                      >
+                        <i className={`fas ${module.icon}`}></i>
+                      </div>
+                      <h3 className="text-sm font-bold text-gray-700 dark:text-[#eeeeee]">{module.label}</h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                      {module.actions.map((action) => {
+                        const isChecked = permissions[module.key]?.[action] === true
+
+                        return (
+                          <label
+                            key={`${module.key}-${action}`}
+                            className="flex items-center justify-between px-3 py-2 bg-white dark:bg-[#2a2a2a] border border-gray-200 dark:border-[#444444] rounded-lg cursor-pointer hover:border-teal-400 transition group"
+                          >
+                            <span className="text-xs text-gray-600 dark:text-[#cccccc] group-hover:text-gray-800 dark:group-hover:text-[#eeeeee]">
+                              {actionLabels[action]}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handlePermissionChange(module.key, action, !isChecked)}
+                              disabled={isLoading}
+                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                isChecked
+                                  ? 'bg-teal-600'
+                                  : 'bg-gray-300'
+                              }`}
+                            >
+                              <span
+                                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                  isChecked
+                                    ? 'translate-x-5'
+                                    : 'translate-x-0.5'
+                                }`}
+                              />
+                            </button>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer Actions - Fixed at bottom */}
+          <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 dark:border-[#444444] bg-white dark:bg-[#2a2a2a]">
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="px-4 py-2 bg-gray-200 dark:bg-[#333333] text-gray-700 dark:text-[#dddddd] text-sm font-medium rounded-lg hover:bg-gray-300 dark:hover:bg-[#444444] transition-all duration-200"
+                disabled={isLoading}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg transition-all duration-200"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin mr-2"></i>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-save mr-2"></i>
+                    Salvar
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

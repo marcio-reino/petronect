@@ -817,7 +817,7 @@ exports.updateRolePermissions = async (req, res) => {
 
     // Atualizar role completo
     await promisePool.query(
-      'UPDATE tb_roles SET role_name = ?, role_description = ?, role_permissions = ?, role_dateupdate = ? WHERE role_id = ?',
+      'UPDATE tb_roles SET role_name = ?, role_description = ?, role_permissions = ?, role_date_update = ? WHERE role_id = ?',
       [name, description, permissions, new Date(), id]
     );
 
@@ -925,7 +925,7 @@ exports.deleteRole = async (req, res) => {
 
     // Soft delete - apenas inativa o cargo
     const [result] = await promisePool.query(
-      'UPDATE tb_roles SET role_status = 0, role_dateupdate = NOW() WHERE role_id = ?',
+      'UPDATE tb_roles SET role_status = 0, role_date_update = NOW() WHERE role_id = ?',
       [id]
     );
 
