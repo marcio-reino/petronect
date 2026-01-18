@@ -8,14 +8,45 @@ router.get('/system', verifyToken, async (req, res) => {
   try {
     const { dateFrom, dateTo, action, userId } = req.query;
 
-    let query = `
-      SELECT 
-        l.*,
-        u.user_name
-      FROM tb_system_logs l
-      LEFT JOIN tb_user u ON l.log_user_id = u.user_id
-      WHERE 1=1
-    `;
+    // Verificar se a tabela existe
+    const [tables] = await promisePool.query(
+      "SHOW TABLES LIKE 'tb_system_logs'"
+    );
+
+    if (tables.length === 0) {
+      // Tabela não existe, retornar array vazio
+      return res.json({
+        success: true,
+        logs: [],
+        message: 'Tabela de logs ainda não foi criada',
+      });
+    }
+
+    // Verificar se a tabela de usuários existe para o JOIN
+    const [userTables] = await promisePool.query(
+      "SHOW TABLES LIKE 'tb_user'"
+    );
+
+    let query;
+    if (userTables.length > 0) {
+      query = `
+        SELECT
+          l.*,
+          u.user_name
+        FROM tb_system_logs l
+        LEFT JOIN tb_user u ON l.log_user_id = u.user_id
+        WHERE 1=1
+      `;
+    } else {
+      query = `
+        SELECT
+          l.*,
+          NULL as user_name
+        FROM tb_system_logs l
+        WHERE 1=1
+      `;
+    }
+
     const params = [];
 
     // Filtro de data inicial
@@ -48,15 +79,26 @@ router.get('/system', verifyToken, async (req, res) => {
     const [logs] = await promisePool.query(query, params);
 
     // Parse JSON fields (se ainda for string, caso contrário já é objeto)
-    const parsedLogs = logs.map(log => ({
-      ...log,
-      log_old_data: log.log_old_data
-        ? (typeof log.log_old_data === 'string' ? JSON.parse(log.log_old_data) : log.log_old_data)
-        : null,
-      log_new_data: log.log_new_data
-        ? (typeof log.log_new_data === 'string' ? JSON.parse(log.log_new_data) : log.log_new_data)
-        : null,
-    }));
+    const parsedLogs = logs.map(log => {
+      try {
+        return {
+          ...log,
+          log_old_data: log.log_old_data
+            ? (typeof log.log_old_data === 'string' ? JSON.parse(log.log_old_data) : log.log_old_data)
+            : null,
+          log_new_data: log.log_new_data
+            ? (typeof log.log_new_data === 'string' ? JSON.parse(log.log_new_data) : log.log_new_data)
+            : null,
+        };
+      } catch (parseError) {
+        // Se falhar ao fazer parse do JSON, retornar como está
+        return {
+          ...log,
+          log_old_data: log.log_old_data || null,
+          log_new_data: log.log_new_data || null,
+        };
+      }
+    });
 
     res.json({
       success: true,
@@ -64,6 +106,16 @@ router.get('/system', verifyToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar logs do sistema:', error);
+
+    // Verificar se é erro de tabela não existente ou coluna não existente
+    if (error.code === 'ER_NO_SUCH_TABLE' || error.code === 'ER_BAD_FIELD_ERROR') {
+      return res.json({
+        success: true,
+        logs: [],
+        message: 'Tabela de logs ainda não foi configurada corretamente',
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Erro ao buscar logs do sistema',
@@ -77,15 +129,47 @@ router.get('/access', verifyToken, async (req, res) => {
   try {
     const { dateFrom, dateTo, accessType, userId } = req.query;
 
-    let query = `
-      SELECT 
-        l.*,
-        u.user_name,
-        u.user_email
-      FROM tb_access_logs l
-      LEFT JOIN tb_user u ON l.access_user_id = u.user_id
-      WHERE 1=1
-    `;
+    // Verificar se a tabela existe
+    const [tables] = await promisePool.query(
+      "SHOW TABLES LIKE 'tb_access_logs'"
+    );
+
+    if (tables.length === 0) {
+      // Tabela não existe, retornar array vazio
+      return res.json({
+        success: true,
+        logs: [],
+        message: 'Tabela de logs ainda não foi criada',
+      });
+    }
+
+    // Verificar se a tabela de usuários existe para o JOIN
+    const [userTables] = await promisePool.query(
+      "SHOW TABLES LIKE 'tb_user'"
+    );
+
+    let query;
+    if (userTables.length > 0) {
+      query = `
+        SELECT
+          l.*,
+          u.user_name,
+          u.user_email
+        FROM tb_access_logs l
+        LEFT JOIN tb_user u ON l.access_user_id = u.user_id
+        WHERE 1=1
+      `;
+    } else {
+      query = `
+        SELECT
+          l.*,
+          NULL as user_name,
+          NULL as user_email
+        FROM tb_access_logs l
+        WHERE 1=1
+      `;
+    }
+
     const params = [];
 
     // Filtro de data inicial
@@ -123,6 +207,16 @@ router.get('/access', verifyToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao buscar logs de acesso:', error);
+
+    // Verificar se é erro de tabela não existente ou coluna não existente
+    if (error.code === 'ER_NO_SUCH_TABLE' || error.code === 'ER_BAD_FIELD_ERROR') {
+      return res.json({
+        success: true,
+        logs: [],
+        message: 'Tabela de logs ainda não foi configurada corretamente',
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Erro ao buscar logs de acesso',
