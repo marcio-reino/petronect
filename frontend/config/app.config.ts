@@ -200,7 +200,7 @@ export const APP_CONFIG = {
       { icon: 'fa-robot', label: 'Agentes', href: '/dashboard/robos/list' },
       { icon: 'fa-users', label: 'Usuarios', href: '/dashboard/users/list' },
       { icon: 'fa-user-shield', label: 'Grupos de Acesso', href: '/dashboard/roles/list' },
-      { icon: 'fa-history', label: 'Logs do Sistema', href: '/dashboard/logs/system' },
+      { icon: 'fa-history', label: 'Logs do Sistema', href: '/dashboard/logs/list' },
     ],
   },
 

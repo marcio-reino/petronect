@@ -260,9 +260,9 @@ export default function LogsSystemList() {
         </div>
 
         {/* Filtros */}
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {/* Data Inicial */}
-          <div className="min-w-[160px]">
+          <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-[#cccccc] mb-1">
               Data Inicial
             </label>
@@ -273,15 +273,25 @@ export default function LogsSystemList() {
                 dateFormat="dd/MM/yyyy"
                 placeholderText="Selecione..."
                 locale="pt-BR"
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-[#444444] rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 dark:focus:ring-teal-600 focus:border-transparent bg-white dark:bg-[#333333] text-gray-700 dark:text-[#eeeeee]"
+                className={`w-full pl-9 ${startDate ? 'pr-8' : 'pr-3'} py-2 border border-gray-300 dark:border-[#444444] rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 dark:focus:ring-teal-600 focus:border-transparent bg-white dark:bg-[#333333] text-gray-700 dark:text-[#eeeeee]`}
                 wrapperClassName="w-full"
               />
               <i className="fas fa-calendar absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-[#888888] pointer-events-none"></i>
+              {startDate && (
+                <button
+                  type="button"
+                  onClick={() => setStartDate(null)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:text-[#888888] dark:hover:text-[#cccccc] transition-colors"
+                  title="Limpar data"
+                >
+                  <i className="fas fa-times text-xs"></i>
+                </button>
+              )}
             </div>
           </div>
 
           {/* Data Final */}
-          <div className="min-w-[160px]">
+          <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-[#cccccc] mb-1">
               Data Final
             </label>
@@ -293,15 +303,25 @@ export default function LogsSystemList() {
                 placeholderText="Selecione..."
                 minDate={startDate || undefined}
                 locale="pt-BR"
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-[#444444] rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 dark:focus:ring-teal-600 focus:border-transparent bg-white dark:bg-[#333333] text-gray-700 dark:text-[#eeeeee]"
+                className={`w-full pl-9 ${endDate ? 'pr-8' : 'pr-3'} py-2 border border-gray-300 dark:border-[#444444] rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 dark:focus:ring-teal-600 focus:border-transparent bg-white dark:bg-[#333333] text-gray-700 dark:text-[#eeeeee]`}
                 wrapperClassName="w-full"
               />
               <i className="fas fa-calendar absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-[#888888] pointer-events-none"></i>
+              {endDate && (
+                <button
+                  type="button"
+                  onClick={() => setEndDate(null)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:text-[#888888] dark:hover:text-[#cccccc] transition-colors"
+                  title="Limpar data"
+                >
+                  <i className="fas fa-times text-xs"></i>
+                </button>
+              )}
             </div>
           </div>
 
           {/* Ação */}
-          <div className="min-w-[140px]">
+          <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-[#cccccc] mb-1">
               Ação
             </label>
@@ -320,7 +340,7 @@ export default function LogsSystemList() {
           </div>
 
           {/* Usuário */}
-          <div className="min-w-[160px]">
+          <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-[#cccccc] mb-1">
               Usuário
             </label>
@@ -339,22 +359,15 @@ export default function LogsSystemList() {
           </div>
 
           {/* Botão Pesquisar */}
-          <button
-            onClick={handleSearch}
-            className="w-10 h-10 inline-flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors"
-            title="Pesquisar"
-          >
-            <i className="fas fa-search"></i>
-          </button>
-
-          {/* Botão Limpar */}
-          <button
-            onClick={handleClearFilters}
-            className="w-10 h-10 inline-flex items-center justify-center bg-gray-200 dark:bg-[#333333] text-gray-700 dark:text-[#dddddd] hover:bg-gray-300 dark:hover:bg-[#444444] rounded-lg transition-colors"
-            title="Limpar filtros"
-          >
-            <i className="fas fa-eraser"></i>
-          </button>
+          <div className="flex items-end">
+            <button
+              onClick={handleSearch}
+              className="w-10 h-10 inline-flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors"
+              title="Pesquisar"
+            >
+              <i className="fas fa-search"></i>
+            </button>
+          </div>
         </div>
       </div>
 
