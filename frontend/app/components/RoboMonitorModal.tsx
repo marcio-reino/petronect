@@ -586,6 +586,8 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
       )
 
       if (res.data && res.data.success) {
+        // Aguardar 3 segundos antes de mostrar o botão de play
+        await new Promise(resolve => setTimeout(resolve, 3000))
         setIsRunning(false)
         await fetchAgentes(true)
         onStatusChange?.()
@@ -722,12 +724,27 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
               {/* Area da Imagem - 60% do tamanho original (1400x900 -> 840x540) */}
               <div className="flex-shrink-0">
                 <div className="bg-white dark:bg-[#1a1a1a] rounded-lg border border-gray-200 dark:border-[#333333] overflow-hidden shadow-sm">
-                  <div className="px-4 py-2 bg-gray-50 dark:bg-[#222222] border-b border-gray-200 dark:border-[#333333] flex items-center">
+                  <div className="px-4 py-2 bg-gray-50 dark:bg-[#222222] border-b border-gray-200 dark:border-[#333333] flex items-center justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">
                       <i className="fas fa-broadcast-tower mr-2"></i>
                       Real Time
                       {isRunning && <span className="ml-2 text-green-500 animate-pulse">LIVE</span>}
                     </span>
+                    {/* Botão para inserir código de verificação manualmente */}
+                    {isRunning && (
+                      <button
+                        onClick={() => {
+                          setVerificationDismissed(false)
+                          verificationDismissedRef.current = false
+                          setShowVerificationModal(true)
+                          showVerificationModalRef.current = true
+                        }}
+                        className="w-7 h-7 bg-gray-200 dark:bg-[#333333] hover:bg-teal-600 dark:hover:bg-teal-600 hover:text-white text-gray-500 dark:text-gray-400 rounded transition-colors flex items-center justify-center"
+                        title="Inserir código de verificação"
+                      >
+                        <i className="fas fa-key text-xs"></i>
+                      </button>
+                    )}
                   </div>
                   {screenshotUrl && !screenshotError ? (
                     <img

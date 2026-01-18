@@ -2,6 +2,20 @@ const { spawn, exec } = require('child_process');
 const path = require('path');
 const { promisePool } = require('../config/database');
 
+// Função de log com timestamp
+function log(message) {
+  const now = new Date();
+  const timestamp = now.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  console.log(`[${timestamp}] ${message}`);
+}
+
 // Map de processos ativos: robo_id → { process, bottag, robo }
 const runningBots = new Map();
 
@@ -23,11 +37,11 @@ async function closeBrowserByBottag(bottag) {
     });
     const data = await response.json();
     if (data.success) {
-      console.log(`[BotManager] Browser do bot ${bottag} fechado no Playwright Service`);
+      log(`[BotManager] Browser do bot ${bottag} fechado no Playwright Service`);
     }
     return data;
   } catch (error) {
-    console.log(`[BotManager] Aviso: não foi possível fechar browser no Playwright Service: ${error.message}`);
+    log(`[BotManager] Aviso: não foi possível fechar browser no Playwright Service: ${error.message}`);
     return { success: false, error: error.message };
   }
 }
@@ -44,7 +58,7 @@ async function fetchNextOpFromQueue(roboId) {
     );
     return rows.length > 0 ? rows[0].opesp_numero : null;
   } catch (error) {
-    console.error('[BotManager] Erro ao buscar próxima OP:', error);
+    log('[BotManager] ERROR: Erro ao buscar próxima OP:', error);
     return null;
   }
 }
@@ -83,8 +97,8 @@ function startBot(robo) {
     args.push('--opresgate', robo.robo_opresgate);
   }
 
-  console.log(`[BotManager] Iniciando bot ${bottag} (ID: ${roboId})`);
-  console.log(`[BotManager] Comando: node ${args.join(' ')}`);
+  log(`[BotManager] Iniciando bot ${bottag} (ID: ${roboId})`);
+  log(`[BotManager] Comando: node ${args.join(' ')}`);
 
   try {
     // No Linux, usar detached: true para criar um grupo de processos
@@ -107,21 +121,21 @@ function startBot(robo) {
     });
 
     proc.on('close', async (code) => {
-      console.log(`[BotManager] Bot ${bottag} finalizado com código ${code}`);
+      log(`[BotManager] Bot ${bottag} finalizado com código ${code}`);
 
       // Verificar se o bot foi parado manualmente (flag stopping ou código 99)
       const botInfo = runningBots.get(roboId);
       const wasStopping = botInfo?.stopping === true;
 
       if (wasStopping || code === 99) {
-        console.log(`[BotManager] Bot ${bottag} parado manualmente, não reiniciar`);
+        log(`[BotManager] Bot ${bottag} parado manualmente, não reiniciar`);
         runningBots.delete(roboId);
         return;
       }
 
       // Se código 0, significa reiniciar o bot
       if (code === 0) {
-        console.log(`[BotManager] Reiniciando bot ${bottag}...`);
+        log(`[BotManager] Reiniciando bot ${bottag}...`);
         runningBots.delete(roboId);
 
         // Buscar dados atualizados do robô e próxima OP
@@ -140,10 +154,10 @@ function startBot(robo) {
             // Reiniciar o bot
             startBot(roboAtualizado);
           } else {
-            console.log(`[BotManager] Bot ${bottag} não será reiniciado (status desligado ou não encontrado)`);
+            log(`[BotManager] Bot ${bottag} não será reiniciado (status desligado ou não encontrado)`);
           }
         } catch (error) {
-          console.error(`[BotManager] Erro ao reiniciar bot ${bottag}:`, error);
+          log(`[BotManager] ERROR: Erro ao reiniciar bot ${bottag}: ${error.message}`);
         }
       } else {
         // Código diferente de 0, não reiniciar
@@ -152,7 +166,7 @@ function startBot(robo) {
     });
 
     proc.on('error', (err) => {
-      console.error(`[BotManager] Erro ao iniciar bot ${bottag}:`, err);
+      log(`[BotManager] ERROR: Erro ao iniciar bot ${bottag}: ${err.message}`);
       runningBots.delete(roboId);
     });
 
@@ -169,7 +183,7 @@ function startBot(robo) {
       pid: proc.pid
     };
   } catch (error) {
-    console.error(`[BotManager] Erro ao spawnar processo:`, error);
+    log(`[BotManager] ERROR: Erro ao spawnar processo: ${error.message}`);
     return {
       success: false,
       message: `Erro ao iniciar bot: ${error.message}`
@@ -195,7 +209,7 @@ async function stopBot(roboId) {
   try {
     const { process: proc, bottag } = botInfo;
 
-    console.log(`[BotManager] Parando bot ${bottag} (PID: ${proc.pid})`);
+    log(`[BotManager] Parando bot ${bottag} (PID: ${proc.pid})`);
 
     // Marcar como sendo parado para evitar reinício
     botInfo.stopping = true;
@@ -207,19 +221,19 @@ async function stopBot(roboId) {
     try {
       proc.stdin.write('STOP\n');
     } catch (e) {
-      console.log(`[BotManager] Erro ao enviar STOP via stdin: ${e.message}`);
+      log(`[BotManager] Erro ao enviar STOP via stdin: ${e.message}`);
     }
 
     // Aguardar um pouco para o bot processar
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Forçar kill imediatamente (não esperar mais)
-    console.log(`[BotManager] Forçando encerramento do bot ${bottag}`);
+    log(`[BotManager] Forçando encerramento do bot ${bottag}`);
 
     if (process.platform === 'win32') {
       // No Windows, usar taskkill para matar a árvore de processos
       exec(`taskkill /pid ${proc.pid} /T /F`, (err) => {
-        if (err) console.log(`[BotManager] taskkill: ${err.message}`);
+        if (err) log(`[BotManager] taskkill: ${err.message}`);
       });
     } else {
       // No Linux, usar kill com -PGID para matar todo o grupo de processos
@@ -227,14 +241,14 @@ async function stopBot(roboId) {
       try {
         // Tentar matar o grupo de processos (negativo do PID)
         process.kill(-proc.pid, 'SIGTERM');
-        console.log(`[BotManager] SIGTERM enviado para grupo de processos ${proc.pid}`);
+        log(`[BotManager] SIGTERM enviado para grupo de processos ${proc.pid}`);
       } catch (e) {
-        console.log(`[BotManager] Erro ao enviar SIGTERM para grupo: ${e.message}`);
+        log(`[BotManager] Erro ao enviar SIGTERM para grupo: ${e.message}`);
         // Fallback: tentar matar processo individual
         try {
           proc.kill('SIGTERM');
         } catch (e2) {
-          console.log(`[BotManager] Erro ao enviar SIGTERM: ${e2.message}`);
+          log(`[BotManager] Erro ao enviar SIGTERM: ${e2.message}`);
         }
       }
 
@@ -244,12 +258,12 @@ async function stopBot(roboId) {
           // Verificar se o processo ainda existe
           process.kill(proc.pid, 0);
           // Se chegou aqui, o processo ainda existe - forçar SIGKILL
-          console.log(`[BotManager] Processo ${proc.pid} ainda ativo, enviando SIGKILL`);
+          log(`[BotManager] Processo ${proc.pid} ainda ativo, enviando SIGKILL`);
 
           // Usar pkill para matar todos os processos filhos no Linux
           exec(`pkill -9 -P ${proc.pid}`, (err) => {
             if (err && err.code !== 1) {
-              console.log(`[BotManager] pkill filhos: ${err.message}`);
+              log(`[BotManager] pkill filhos: ${err.message}`);
             }
           });
 
@@ -260,12 +274,12 @@ async function stopBot(roboId) {
             try {
               proc.kill('SIGKILL');
             } catch (e2) {
-              console.log(`[BotManager] Erro ao enviar SIGKILL: ${e2.message}`);
+              log(`[BotManager] Erro ao enviar SIGKILL: ${e2.message}`);
             }
           }
         } catch (checkErr) {
           // Processo já terminou
-          console.log(`[BotManager] Processo ${proc.pid} já encerrado`);
+          log(`[BotManager] Processo ${proc.pid} já encerrado`);
         }
       }, 2000);
     }
@@ -280,7 +294,7 @@ async function stopBot(roboId) {
         [roboId]
       );
     } catch (dbErr) {
-      console.error(`[BotManager] Erro ao atualizar status no banco:`, dbErr.message);
+      log(`[BotManager] ERROR: Erro ao atualizar status no banco: ${dbErr.message}`);
     }
 
     return {
@@ -288,7 +302,7 @@ async function stopBot(roboId) {
       message: `Bot ${bottag} parado com sucesso`
     };
   } catch (error) {
-    console.error(`[BotManager] Erro ao parar bot:`, error);
+    log(`[BotManager] ERROR: Erro ao parar bot: ${error.message}`);
     runningBots.delete(roboId);
     return {
       success: false,
@@ -345,7 +359,7 @@ function getAllRunningBots() {
  * Para todos os bots em execução (para shutdown gracioso)
  */
 function stopAllBots() {
-  console.log(`[BotManager] Parando todos os bots (${runningBots.size} ativos)`);
+  log(`[BotManager] Parando todos os bots (${runningBots.size} ativos)`);
   runningBots.forEach((_, roboId) => {
     stopBot(roboId);
   });
