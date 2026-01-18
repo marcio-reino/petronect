@@ -42,17 +42,14 @@ exports.getAllOportunidades = async (req, res) => {
       params.push(`%${descricao}%`);
     }
 
-    // Filtro por datas
-    if (dataInicio && dataFim) {
-      // Ambas as datas: retorna OPs no período
-      query += ` AND opt_datainicio >= ? AND opt_datafim <= ?`;
-      params.push(dataInicio, dataFim);
-    } else if (dataInicio) {
-      // Apenas data início: retorna OPs com data início na data informada
+    // Filtro por datas (cada campo filtra independentemente)
+    if (dataInicio) {
+      // Data Início filtra por opt_datainicio
       query += ` AND DATE(opt_datainicio) = ?`;
       params.push(dataInicio);
-    } else if (dataFim) {
-      // Apenas data fim: retorna OPs com data fim na data informada
+    }
+    if (dataFim) {
+      // Data Fim filtra por opt_datafim
       query += ` AND DATE(opt_datafim) = ?`;
       params.push(dataFim);
     }
@@ -89,13 +86,11 @@ exports.getAllOportunidades = async (req, res) => {
       countQuery += ` AND opt_descricao LIKE ?`;
       countParams.push(`%${descricao}%`);
     }
-    if (dataInicio && dataFim) {
-      countQuery += ` AND opt_datainicio >= ? AND opt_datafim <= ?`;
-      countParams.push(dataInicio, dataFim);
-    } else if (dataInicio) {
+    if (dataInicio) {
       countQuery += ` AND DATE(opt_datainicio) = ?`;
       countParams.push(dataInicio);
-    } else if (dataFim) {
+    }
+    if (dataFim) {
       countQuery += ` AND DATE(opt_datafim) = ?`;
       countParams.push(dataFim);
     }

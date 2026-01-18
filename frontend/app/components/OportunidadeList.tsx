@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import api from '@/config/api'
+import { APP_CONFIG } from '@/config/app.config'
 import StatusBadge from './StatusBadge'
 import DatePicker from './DatePicker'
 import OportunidadeItensModal from './OportunidadeItensModal'
@@ -234,6 +235,7 @@ export default function OportunidadeList() {
       // Pegar robô do primeiro item (se existir)
       const robo = itens.length > 0 && itens[0].optitem_robo ? itens[0].optitem_robo : 'SISTEMA'
       txt += `PROCESSADO EM:   ${processadoEm} - ${robo}\n`
+      txt += `Mach-9 Tecnologia - agentepetronect.com - versão: ${APP_CONFIG.system.version}\n`
       txt += '######################################## FIM ########################################\n'
 
       // Criar e baixar arquivo
@@ -289,6 +291,7 @@ export default function OportunidadeList() {
 
     const robo = itens.length > 0 && itens[0].optitem_robo ? itens[0].optitem_robo : 'SISTEMA'
     txt += `PROCESSADO EM:   ${processadoEm} - ${robo}\n`
+    txt += `Mach-9 Tecnologia - agentepetronect.com - versão: ${APP_CONFIG.system.version}\n`
     txt += '######################################## FIM ########################################\n'
 
     return txt

@@ -1034,10 +1034,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
           // Unidade - campo input na coluna 9 (atualizado)
           const xpath_unidade_item = `//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[1]/td/div/div/table/tbody/tr[2]/td/div/div/div/div/table/tbody/tr[4]/td/table/tbody/tr/td[1]/table/tbody/tr[${id_item}]/td[9]/table/tbody/tr/td/input`;
           const xpath_link_desc_item = `//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[1]/td/div/div/table/tbody/tr[2]/td/div/div/div/div/table/tbody/tr[4]/td/table/tbody/tr/td[1]/table/tbody/tr[${id_item}]/td[6]/a`;
-          // Botão Notas e Anexos
-          const xpath_btn_notas_anexos = `//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[3]/td/div/div/table/tbody/tr[2]/td/div/div/div/span/span[2]/table/tbody/tr[1]/td/table/tbody/tr/td[2]/div/div[3]/div[1]`;
-          // Botão Texto do Item
-          const xpath_btn_texto_item = `//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[3]/td/div/div/table/tbody/tr[2]/td/div/div/div/span/span[2]/table/tbody/tr[3]/td/div[3]/div/div/span/span[2]/table/tbody/tr/td/div/table/tbody/tr[1]/td/div/div/table/tbody/tr[2]/td/div/div/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr/td/table/tbody/tr[4]/td[2]/a/span`;
+          // Botões "Notas e Anexos", "Texto do Item" e "Família do Produto" agora são clicados por texto
 
           try {
             await frame('isolatedWorkArea', 'waitForSelector', xpath_id_item, null, { timeout: 10000 });
@@ -1086,14 +1083,16 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
             const item_desc = itemDescResult.result || '';
 
             log(`[Bot ${bottag}] ========================================`);
-            log(`[Bot ${bottag}] RESGATANDO ITEM ${item_id} de ${qtd_itens}`);
+            log(`[Bot ${bottag}] RESGATANDO ITEM ${itemNum}/${qtd_itens} (ID: ${item_id})`);
             log(`[Bot ${bottag}] ----------------------------------------`);
             log(`[Bot ${bottag}] DESCRIÇÃO:      ${item_desc.substr(0, 80)}...`);
             log(`[Bot ${bottag}] QUANTIDADE:     ${item_qtd}`);
             log(`[Bot ${bottag}] UNIDADE:        ${item_unidade}`);
             log(`[Bot ${bottag}] ID PRODUTO:     ${item_produto_id || '(vazio)'}`);
             await SaveLogBot(`Resgatando item: [${item_id}] - ${item_desc.substr(0, 100)}`);
-            await UpdateProcesso(n_op_processar, parseInt(item_id), qtd_itens, 'running');
+            // Usar itemNum (índice sequencial) em vez de item_id (número do item na proposta)
+            // item_id pode ser como "8001" mas itemNum é o índice 1, 2, 3...
+            await UpdateProcesso(n_op_processar, itemNum, qtd_itens, 'running');
 
             // Clicar no link da descrição para abrir o detalhe do item
             let item_desc_completa = '';
@@ -1119,9 +1118,9 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
               await screenshot(bottag);
               // Capturar ID da Família do Produto via aba "Família do Produto"
               try {
-                log(`[Bot ${bottag}] Acessando aba Família do Produto...`);
-                const xpath_aba_familia_produto = '//html/body/table/tbody/tr/td/div/table/tbody/tr/td/div/table/tbody/tr[1]/td/table/tbody/tr/td/div/table/tbody/tr[2]/td/div/div/table/tbody/tr[3]/td/table/tbody/tr/td/div/div/div/div/div/table/tbody/tr[3]/td/div/div/table/tbody/tr[2]/td/div/div/div/span/span[2]/table/tbody/tr[1]/td/table/tbody/tr/td[2]/div/div[4]/div[1]';
-                await frame('isolatedWorkArea', 'click', xpath_aba_familia_produto);
+                log(`[Bot ${bottag}] Acessando aba Família do Produto (timeout 15s)...`);
+                // Usando seletor de texto com timeout de 15 segundos
+                await frame('isolatedWorkArea', 'click', 'text=Família', null, { timeout: 15000 });
                 await wait(3000);
                 await screenshot(bottag);
 
@@ -1144,12 +1143,14 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
               // Capturar Descrição Longa do Item via Notas e Anexos > Texto do Item
               try {
                 log(`[Bot ${bottag}] Acessando Notas e Anexos...`);
-                await frame('isolatedWorkArea', 'click', xpath_btn_notas_anexos);
+                // Usando seletor de texto em vez de XPath complexo
+                await frame('isolatedWorkArea', 'click', 'text=Notas e Anexos');
                 await wait(3000);
                 await screenshot(bottag);
 
                 log(`[Bot ${bottag}] Acessando Texto do Item...`);
-                await frame('isolatedWorkArea', 'click', xpath_btn_texto_item);
+                // Usando seletor de texto em vez de XPath complexo
+                await frame('isolatedWorkArea', 'click', 'text=Textos de Item');
                 await wait(3000);
                 await screenshot(bottag);
 

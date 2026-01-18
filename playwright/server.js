@@ -1103,22 +1103,10 @@ app.post('/browser/:browserId/page/:pageId/get-urlspw-textarea', async (req, res
       // Usar locator para acessar o iframe e o textbox por role
       const textbox = page.locator(`iframe[name="${frameName}"]`).contentFrame().getByRole('textbox', { name: textName });
 
-      // Verificar se existe
+      // Verificar se existe - pesquisar apenas em URLSPW-0
       const count = await textbox.count();
       if (count === 0) {
-        // Tentar outros nomes de iframe (URLSPW-1, URLSPW-2, etc)
-        for (let i = 1; i <= 5; i++) {
-          const altFrameName = `URLSPW-${i}`;
-          console.log(`[PlaywrightService] Tentando iframe alternativo: ${altFrameName}`);
-          const altTextbox = page.locator(`iframe[name="${altFrameName}"]`).contentFrame().getByRole('textbox', { name: textName });
-          const altCount = await altTextbox.count();
-          if (altCount > 0) {
-            const value = await altTextbox.inputValue();
-            console.log(`[PlaywrightService] Textarea encontrado no iframe: ${altFrameName}`);
-            return res.json({ success: true, result: value, iframe: altFrameName });
-          }
-        }
-        return res.json({ success: false, error: 'Textarea não encontrado em nenhum iframe URLSPW' });
+        return res.json({ success: false, error: 'Textarea não encontrado no iframe URLSPW-0' });
       }
 
       const value = await textbox.inputValue();
