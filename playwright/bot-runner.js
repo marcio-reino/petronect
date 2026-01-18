@@ -1141,6 +1141,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
                 // Fechar o modal de Texto do Item (botão X ou clicar fora)
                 console.log(`[Bot ${bottag}] Fechando modal de Texto do Item...`);
                 await mouseClick(1005, 590);
+                await mouseClick(1060, 590);
                 await wait(2000);
 
                 // Capturar ID da Família do Produto via aba "Família do Produto"
