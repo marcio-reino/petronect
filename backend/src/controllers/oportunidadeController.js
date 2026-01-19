@@ -61,7 +61,7 @@ exports.getAllOportunidades = async (req, res) => {
     }
 
     // Ordenação
-    query += ` ORDER BY opt_datainicio DESC, opt_id DESC`;
+    query += ` ORDER BY opt_id DESC`;
 
     // Paginação
     const offset = (parseInt(page) - 1) * parseInt(limit);

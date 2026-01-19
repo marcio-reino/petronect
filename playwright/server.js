@@ -58,6 +58,76 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Verificar status do site Petronect
+app.get('/petronect-status', async (req, res) => {
+  const startTime = Date.now();
+  let browser = null;
+  let browserId = null;
+
+  try {
+    const targetUrl = 'https://www.petronect.com.br/irj/go/km/docs/pccshrcontent/Site%20Content%20(Legacy)/Portal2018/pt/index.html';
+    const searchText = 'Portal de Compras da Petrobras';
+
+    console.log('[PetronectStatus] Verificando status do Petronect...');
+
+    // Iniciar browser temporário
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+
+    browserId = ++browserIdCounter;
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    });
+
+    const page = await context.newPage();
+    page.setDefaultTimeout(30000);
+
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(3000);
+
+    const pageContent = await page.content();
+    const isOnline = pageContent.includes(searchText);
+
+    const responseTime = Date.now() - startTime;
+
+    console.log('[PetronectStatus] Verificação concluída:');
+    console.log('- Texto encontrado:', isOnline);
+    console.log('- Tempo de resposta:', responseTime, 'ms');
+
+    await browser.close();
+
+    res.json({
+      success: true,
+      data: {
+        status: isOnline ? 'online' : 'offline',
+        statusCode: 200,
+        responseTime: responseTime,
+        checkedAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+    console.error('[PetronectStatus] Erro:', error.message);
+
+    if (browser) {
+      try { await browser.close(); } catch (e) {}
+    }
+
+    res.json({
+      success: true,
+      data: {
+        status: 'offline',
+        statusCode: 0,
+        responseTime: responseTime,
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      }
+    });
+  }
+});
+
 // Servir screenshots por nome do robô (bottag)
 app.get('/screenshots/:bottag', (req, res) => {
   try {
