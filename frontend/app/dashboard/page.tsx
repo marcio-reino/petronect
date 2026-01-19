@@ -169,7 +169,8 @@ export default function DashboardPage() {
 
   const fetchPetronectStatus = async () => {
     try {
-      const res = await api.get('/petronect-status')
+      // Timeout maior pois a verificação com Playwright pode levar até 30 segundos
+      const res = await api.get('/petronect-status', { timeout: 120000 })
 
       if (res.data && res.data.success) {
         setPetronectStatus(res.data.data)
