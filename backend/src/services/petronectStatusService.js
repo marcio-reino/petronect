@@ -3,7 +3,7 @@
  * Utiliza o serviço Playwright (porta 3003) que já está rodando no servidor
  */
 
-const PLAYWRIGHT_SERVICE_URL = process.env.PLAYWRIGHT_SERVICE_URL || 'http://127.0.0.1:3003';
+const PLAYWRIGHT_SERVICE_URL = process.env.PLAYWRIGHT_SERVICE_URL || 'http://localhost:3003';
 
 class PetronectStatusService {
   async checkStatus() {
