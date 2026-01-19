@@ -646,6 +646,13 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
         .dark .teal-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
       ` }} />
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-[#333333]">
@@ -659,26 +666,27 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
               className="w-8 h-8"
             />
           )}
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Monitor de Agentes</h1>
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+            <span className="md:hidden">Monitor</span>
+            <span className="hidden md:inline">Monitor de Agentes</span>
+          </h1>
         </div>
 
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            Pressione <kbd className="px-2 py-1 bg-gray-100 dark:bg-[#333333] rounded text-gray-600 dark:text-gray-300 text-xs font-mono">ESC</kbd> para fechar
-          </span>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-[#333333] flex items-center justify-center transition-colors"
-            title="Fechar"
-          >
-            <i className="fas fa-times text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white text-lg"></i>
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          className="w-10 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-[#333333] flex items-center justify-center transition-colors"
+          title="Fechar"
+        >
+          <i className="fas fa-times text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white text-lg"></i>
+        </button>
       </div>
 
       {/* Botoes dos Agentes */}
-      <div className="px-6 py-3 bg-gray-50 dark:bg-[#222222] border-b border-gray-200 dark:border-[#333333]">
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="px-4 md:px-6 py-3 bg-gray-50 dark:bg-[#222222] border-b border-gray-200 dark:border-[#333333]">
+        <div
+          className="flex items-center gap-2 overflow-x-auto md:overflow-x-visible md:flex-wrap pb-2 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           {loading ? (
             <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
               <i className="fas fa-spinner fa-spin"></i>
@@ -691,7 +699,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
               <button
                 key={agente.robo_id}
                 onClick={() => setSelectedAgente(agente)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 flex-shrink-0 ${
                   selectedAgente?.robo_id === agente.robo_id
                     ? 'bg-teal-600 text-white'
                     : 'bg-gray-200 dark:bg-[#333333] text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-[#444444]'
@@ -716,13 +724,13 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
       </div>
 
       {/* Content */}
-      <div className="flex-1 p-6 overflow-y-auto bg-gray-100 dark:bg-transparent">
+      <div className="flex-1 p-4 md:p-6 overflow-y-auto bg-gray-100 dark:bg-transparent">
         <div className="max-w-7xl mx-auto">
           {selectedAgente ? (
             <>
-            <div className="flex gap-6">
-              {/* Area da Imagem - 60% do tamanho original (1400x900 -> 840x540) */}
-              <div className="flex-shrink-0">
+            <div className="flex flex-col md:flex-row gap-4 md:gap-6">
+              {/* Area da Imagem - responsivo no mobile, fixo no desktop */}
+              <div className="w-full md:w-auto md:flex-shrink-0">
                 <div className="bg-white dark:bg-[#1a1a1a] rounded-lg border border-gray-200 dark:border-[#333333] overflow-hidden shadow-sm">
                   <div className="px-4 py-2 bg-gray-50 dark:bg-[#222222] border-b border-gray-200 dark:border-[#333333] flex items-center justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -750,24 +758,24 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
                     <img
                       src={screenshotUrl}
                       alt="Screenshot do agente"
-                      className="w-[840px] h-[540px] object-cover"
+                      className="w-full md:w-[840px] h-auto md:h-[540px] object-cover"
                       style={{ opacity: 0.5 }}
                       onError={() => setScreenshotError(true)}
                     />
                   ) : (
-                    <div className="w-[840px] h-[540px] bg-gray-100 dark:bg-[#252525] flex flex-col items-center justify-center">
+                    <div className="w-full md:w-[840px] aspect-video md:h-[540px] bg-gray-100 dark:bg-[#252525] flex flex-col items-center justify-center">
                       {APP_CONFIG.branding.loginLogo.type === 'image' ? (
                         <img
                           src={APP_CONFIG.branding.loginLogo.image}
                           alt="Logo"
-                          className="w-64 h-auto mb-4"
+                          className="w-32 md:w-64 h-auto mb-4"
                           style={{ opacity: 0.3 }}
                         />
                       ) : (
-                        <i className={`fas ${APP_CONFIG.branding.loginLogo.icon} text-gray-300 dark:text-gray-600 text-6xl mb-4`}></i>
+                        <i className={`fas ${APP_CONFIG.branding.loginLogo.icon} text-gray-300 dark:text-gray-600 text-4xl md:text-6xl mb-4`}></i>
                       )}
-                      <p className="text-gray-400 dark:text-gray-500 text-sm">Aguardando real time...</p>
-                      <p className="text-gray-300 dark:text-gray-600 text-xs mt-1">Agente: {selectedAgente.robo_nome}</p>
+                      <p className="text-gray-400 dark:text-gray-500 text-xs md:text-sm">Aguardando real time...</p>
+                      <p className="text-gray-300 dark:text-gray-600 text-[10px] md:text-xs mt-1">Agente: {selectedAgente.robo_nome}</p>
                     </div>
                   )}
                 </div>
@@ -795,7 +803,7 @@ export default function RoboMonitorModal({ isOpen, onClose, onStatusChange }: Ro
               </div>
 
               {/* Histórico de Ações */}
-              <div className="flex-1 flex flex-col min-w-[350px]">
+              <div className="flex-1 flex flex-col min-w-0 md:min-w-[350px]">
                 <div className="bg-white dark:bg-[#1a1a1a] rounded-lg border border-gray-200 dark:border-[#333333] flex flex-col shadow-sm flex-1 relative">
                   <div className="px-4 py-2 border-b border-gray-200 dark:border-[#333333] flex items-center justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">

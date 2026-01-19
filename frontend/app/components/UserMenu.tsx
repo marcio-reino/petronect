@@ -18,7 +18,11 @@ interface UserData {
   updatedAt?: string
 }
 
-export default function UserMenu() {
+interface UserMenuProps {
+  showNameOnMobile?: boolean
+}
+
+export default function UserMenu({ showNameOnMobile = false }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false)
@@ -214,7 +218,7 @@ export default function UserMenu() {
         </div>
 
         {/* Nome e Cargo */}
-        <div className="text-left hidden md:block">
+        <div className={`text-left ${showNameOnMobile ? 'block' : 'hidden md:block'}`}>
           <p className="text-sm font-semibold text-gray-800 dark:text-[#eeeeee]">{user.name}</p>
           <p className="text-xs text-gray-500 dark:text-[#aaaaaa]">{user.role}</p>
         </div>

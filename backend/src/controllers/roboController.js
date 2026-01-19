@@ -167,9 +167,9 @@ exports.updateRobo = async (req, res) => {
       status
     } = req.body;
 
-    // Verificar se o robô existe
+    // Verificar se o robô existe e obter dados antigos para o log
     const [existing] = await promisePool.query(
-      'SELECT robo_id FROM tb_robo WHERE robo_id = ?',
+      'SELECT * FROM tb_robo WHERE robo_id = ?',
       [id]
     );
 
@@ -261,6 +261,44 @@ exports.updateRobo = async (req, res) => {
       `UPDATE tb_robo SET ${updateFields.join(', ')} WHERE robo_id = ?`,
       updateValues
     );
+
+    // Obter dados antigos para o log
+    const roboAntigo = existing[0];
+
+    // Preparar dados para o log
+    const oldData = {
+      nome: roboAntigo.robo_nome,
+      descricao: roboAntigo.robo_dec,
+      tipo: roboAntigo.robo_tipo === 0 ? 'OP' : 'RT',
+      usuario: roboAntigo.robo_user,
+      tempo: roboAntigo.robo_tempo,
+      velocidade: roboAntigo.robo_velocidade,
+      status: roboAntigo.robo_status === 1 ? 'Ativo' : 'Inativo'
+    };
+
+    const newData = {};
+    if (nome !== undefined) newData.nome = nome;
+    if (descricao !== undefined) newData.descricao = descricao;
+    if (tipo !== undefined) newData.tipo = tipo === 0 ? 'OP' : 'RT';
+    if (user !== undefined) newData.usuario = user;
+    if (tempo !== undefined) newData.tempo = tempo;
+    if (velocidade !== undefined) newData.velocidade = velocidade;
+    if (status !== undefined) newData.status = status === 1 ? 'Ativo' : 'Inativo';
+
+    // Registrar no log do sistema
+    await logSystemActivity({
+      userId: req.user?.id || null,
+      userName: req.user?.name || 'Sistema',
+      action: 'UPDATE',
+      module: 'agentes',
+      entityType: 'robo',
+      entityId: parseInt(id),
+      description: `Agente "${roboAntigo.robo_nome}" (ID: ${id}) atualizado`,
+      oldData,
+      newData,
+      ipAddress: getClientIp(req),
+      userAgent: getUserAgent(req)
+    });
 
     res.json({
       success: true,
@@ -673,8 +711,12 @@ exports.removeOportunidadeEspecifica = async (req, res) => {
   try {
     const { roboId, opespId } = req.params;
 
+    // Buscar dados da oportunidade e do robô para o log
     const [existing] = await promisePool.query(
-      'SELECT opesp_id FROM tb_oportunidades_especificas WHERE opesp_id = ? AND opesp_robo_id = ?',
+      `SELECT oe.opesp_id, oe.opesp_numero, oe.opesp_robo_id, r.robo_nome
+       FROM tb_oportunidades_especificas oe
+       INNER JOIN tb_robo r ON r.robo_id = oe.opesp_robo_id
+       WHERE oe.opesp_id = ? AND oe.opesp_robo_id = ?`,
       [opespId, roboId]
     );
 
@@ -685,10 +727,31 @@ exports.removeOportunidadeEspecifica = async (req, res) => {
       });
     }
 
+    const oportunidade = existing[0];
+
     await promisePool.query(
       'DELETE FROM tb_oportunidades_especificas WHERE opesp_id = ?',
       [opespId]
     );
+
+    // Registrar no log do sistema
+    await logSystemActivity({
+      userId: req.user?.id || null,
+      userName: req.user?.name || 'Sistema',
+      action: 'DELETE',
+      module: 'agentes',
+      entityType: 'oportunidade_especifica',
+      entityId: parseInt(opespId),
+      description: `Oportunidade "${oportunidade.opesp_numero}" removida da lista do agente "${oportunidade.robo_nome}" (ID: ${roboId})`,
+      oldData: {
+        numero: oportunidade.opesp_numero,
+        agenteId: parseInt(roboId),
+        agenteNome: oportunidade.robo_nome
+      },
+      newData: null,
+      ipAddress: getClientIp(req),
+      userAgent: getUserAgent(req)
+    });
 
     res.json({
       success: true,
@@ -866,11 +929,14 @@ exports.getDashboardStats = async (req, res) => {
     `);
 
     // Formatar dados para o frontend
+    // Um agente só é considerado "working" se:
+    // 1. Está ativo no sistema (robo_status = 1)
+    // 2. Tem um processo em execução (proc_status = 'running')
     const agentesFormatados = agentes.map(agente => ({
       id: agente.robo_id,
       nome: agente.robo_nome,
       tipo: agente.robo_tipo === 0 ? 'OP' : 'RT',
-      status: agente.proc_status === 'running' ? 'working' : 'idle',
+      status: (agente.robo_status === 1 && agente.proc_status === 'running') ? 'working' : 'idle',
       opAtual: agente.proc_op_numero || agente.robo_opresgate || null,
       itemAtual: agente.proc_item_atual || 0,
       totalItens: agente.proc_total_itens || 0,

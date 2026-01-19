@@ -29,6 +29,14 @@ interface AgentesStats {
   agentes: AgenteAtivo[]
 }
 
+interface PetronectStatus {
+  status: 'online' | 'offline' | 'checking'
+  statusCode: number
+  responseTime: number
+  checkedAt: string | null
+  error?: string
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<OportunidadesStats>({
     ultimas24h: 0,
@@ -54,9 +62,19 @@ export default function DashboardPage() {
 
   const oportunidadesIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Estados para o card de Status do Petronect
+  const [petronectStatus, setPetronectStatus] = useState<PetronectStatus>({
+    status: 'checking',
+    statusCode: 0,
+    responseTime: 0,
+    checkedAt: null
+  })
+  const petronectIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
   useEffect(() => {
     fetchOportunidadesStats(true) // Mostrar loading apenas na primeira carga
     fetchAgentesStats(true) // Mostrar loading apenas na primeira carga
+    fetchPetronectStatus() // Verificar status do Petronect
 
     // Atualizar dados das oportunidades automaticamente a cada 15 segundos
     oportunidadesIntervalRef.current = setInterval(() => {
@@ -68,12 +86,20 @@ export default function DashboardPage() {
       fetchAgentesStats() // Sem loading nas atualizações automáticas
     }, 5000)
 
+    // Verificar status do Petronect a cada 3 minutos
+    petronectIntervalRef.current = setInterval(() => {
+      fetchPetronectStatus()
+    }, 180000)
+
     return () => {
       if (oportunidadesIntervalRef.current) {
         clearInterval(oportunidadesIntervalRef.current)
       }
       if (agentesIntervalRef.current) {
         clearInterval(agentesIntervalRef.current)
+      }
+      if (petronectIntervalRef.current) {
+        clearInterval(petronectIntervalRef.current)
       }
     }
   }, [])
@@ -138,6 +164,25 @@ export default function DashboardPage() {
       console.error('Erro ao buscar dados dos agentes:', error)
     } finally {
       if (showLoading) setAgentesLoading(false)
+    }
+  }
+
+  const fetchPetronectStatus = async () => {
+    try {
+      const res = await api.get('/petronect-status')
+
+      if (res.data && res.data.success) {
+        setPetronectStatus(res.data.data)
+      }
+    } catch (error) {
+      console.error('Erro ao verificar status do Petronect:', error)
+      setPetronectStatus({
+        status: 'offline',
+        statusCode: 0,
+        responseTime: 0,
+        checkedAt: new Date().toISOString(),
+        error: 'Erro ao verificar'
+      })
     }
   }
 
@@ -300,7 +345,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-center py-8">
                   <i className="fas fa-spinner fa-spin text-gray-400 text-2xl"></i>
                 </div>
-              ) : totalAgentes === 0 ? (
+              ) : agentesEmTrabalho.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <div className="w-16 h-16 bg-gray-100 dark:bg-[#252525] rounded-full flex items-center justify-center mb-3">
                     <i className="fas fa-robot text-gray-400 dark:text-gray-500 text-2xl"></i>
@@ -359,44 +404,165 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Footer do Card */}
-            <div className="px-6 py-3 bg-gray-50 dark:bg-[#252525] border-t border-gray-100 dark:border-[#333333]">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1">
-                  {agentesEmTrabalho.map((_, index) => (
-                    <span
-                      key={index}
-                      className={`w-2 h-2 rounded-full transition-colors ${
-                        index === agenteAtualIndex
-                          ? 'bg-teal-500'
-                          : 'bg-gray-300 dark:bg-gray-600'
-                      }`}
-                    ></span>
-                  ))}
+            {/* Footer do Card - só exibe se houver agentes em trabalho */}
+            {agentesEmTrabalho.length > 0 && (
+              <div className="px-6 py-3 bg-gray-50 dark:bg-[#252525] border-t border-gray-100 dark:border-[#333333]">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1">
+                    {agentesEmTrabalho.map((_, index) => (
+                      <span
+                        key={index}
+                        className={`w-2 h-2 rounded-full transition-colors ${
+                          index === agenteAtualIndex
+                            ? 'bg-teal-500'
+                            : 'bg-gray-300 dark:bg-gray-600'
+                        }`}
+                      ></span>
+                    ))}
+                  </div>
+                  <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                    <i className="fas fa-sync-alt fa-spin text-[10px]"></i>
+                    Atualização automática
+                  </span>
                 </div>
-                <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
-                  <i className="fas fa-sync-alt fa-spin text-[10px]"></i>
-                  Atualização automática
-                </span>
+                {/* Barra de progresso da rotação */}
+                {agentesEmTrabalho.length > 1 && (
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 overflow-hidden">
+                    <div
+                      key={progressKey}
+                      className="bg-teal-500 h-1 rounded-full animate-progress-bar"
+                      style={{
+                        animation: 'progressBar 10s linear forwards'
+                      }}
+                    ></div>
+                  </div>
+                )}
+                <style jsx>{`
+                  @keyframes progressBar {
+                    from { width: 0%; }
+                    to { width: 100%; }
+                  }
+                `}</style>
               </div>
-              {/* Barra de progresso da rotação */}
-              {agentesEmTrabalho.length > 1 && (
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 overflow-hidden">
-                  <div
-                    key={progressKey}
-                    className="bg-teal-500 h-1 rounded-full animate-progress-bar"
-                    style={{
-                      animation: 'progressBar 10s linear forwards'
-                    }}
-                  ></div>
+            )}
+          </div>
+
+          {/* Card: Status Petronect */}
+          <div className="bg-white dark:bg-[#1e1e1e] rounded-xl border border-gray-200 dark:border-[#333333] shadow-sm overflow-hidden">
+            {/* Header do Card */}
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-[#333333]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-extrabold text-gray-700 dark:text-gray-300 text-3xl">Status</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">petronect.com.br</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {petronectStatus.status === 'checking' ? (
+                    <i className="fas fa-spinner fa-spin text-gray-400 text-xl"></i>
+                  ) : petronectStatus.status === 'online' ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                      <span className="text-sm font-medium text-green-600 dark:text-green-400">Online</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+                      <span className="text-sm font-medium text-red-600 dark:text-red-400">Offline</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Corpo do Card */}
+            <div className="p-6">
+              {petronectStatus.status === 'checking' ? (
+                <div className="flex items-center justify-center py-8">
+                  <i className="fas fa-spinner fa-spin text-gray-400 text-2xl"></i>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {/* Status Visual */}
+                  <div className="flex items-center justify-center">
+                    <div className={`w-24 h-24 rounded-full flex items-center justify-center ${
+                      petronectStatus.status === 'online'
+                        ? 'bg-green-100 dark:bg-green-900/20'
+                        : 'bg-red-100 dark:bg-red-900/20'
+                    }`}>
+                      <i className={`fas ${
+                        petronectStatus.status === 'online' ? 'fa-check-circle' : 'fa-times-circle'
+                      } text-5xl ${
+                        petronectStatus.status === 'online'
+                          ? 'text-green-500 dark:text-green-400'
+                          : 'text-red-500 dark:text-red-400'
+                      }`}></i>
+                    </div>
+                  </div>
+
+                  {/* Divisor */}
+                  <div className="border-t border-gray-100 dark:border-[#333333]"></div>
+
+                  {/* Tempo de Resposta */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gray-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+                        <i className="fas fa-tachometer-alt text-gray-500 dark:text-blue-500"></i>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Tempo de resposta</p>
+                        <p className="text-lg font-bold text-gray-800 dark:text-white">
+                          {petronectStatus.responseTime} ms
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      petronectStatus.responseTime < 1000
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : petronectStatus.responseTime < 3000
+                        ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                    }`}>
+                      {petronectStatus.responseTime < 1000 ? 'Rápido' : petronectStatus.responseTime < 3000 ? 'Médio' : 'Lento'}
+                    </span>
+                  </div>
+
+                  {/* Código HTTP */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gray-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
+                      <i className="fas fa-code text-gray-500 dark:text-purple-500"></i>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Código HTTP</p>
+                      <p className="text-lg font-bold text-gray-800 dark:text-white">
+                        {petronectStatus.statusCode || '-'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Erro (se houver) */}
+                  {petronectStatus.error && (
+                    <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
+                      <p className="text-xs text-red-600 dark:text-red-400">
+                        <i className="fas fa-exclamation-triangle mr-1"></i>
+                        {petronectStatus.error}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
-              <style jsx>{`
-                @keyframes progressBar {
-                  from { width: 0%; }
-                  to { width: 100%; }
-                }
-              `}</style>
+            </div>
+
+            {/* Footer do Card */}
+            <div className="px-6 py-3 bg-gray-50 dark:bg-[#252525] border-t border-gray-100 dark:border-[#333333]">
+              <div className="flex items-center justify-center">
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  {petronectStatus.checkedAt ? (
+                    <>Última verificação: {new Date(petronectStatus.checkedAt).toLocaleTimeString('pt-BR')}</>
+                  ) : (
+                    'Verificando...'
+                  )}
+                </span>
+              </div>
             </div>
           </div>
         </div>

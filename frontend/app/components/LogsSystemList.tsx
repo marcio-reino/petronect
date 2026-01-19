@@ -243,7 +243,7 @@ export default function LogsSystemList() {
     <>
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-800 dark:text-[#eeeeee]">Logs do Sistema</h1>
             <p className="text-sm text-gray-500 dark:text-[#aaaaaa]">Registro de todas as atividades do sistema</p>
@@ -260,7 +260,7 @@ export default function LogsSystemList() {
         </div>
 
         {/* Filtros */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {/* Data Inicial */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-[#cccccc] mb-1">
@@ -456,19 +456,18 @@ export default function LogsSystemList() {
 
         {/* Pagination */}
         {pagination.total > 0 && (
-          <div className="px-6 py-4 border-t border-gray-200 bg-white dark:border-[#444444] dark:bg-[#2a2a2a]">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-              {/* Info */}
+          <div className="px-4 py-3 md:px-6 md:py-4 border-t border-gray-200 bg-white dark:border-[#444444] dark:bg-[#2a2a2a]">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3 md:gap-4">
+              {/* Info - compacto no mobile */}
               <div className="text-sm text-gray-600 dark:text-[#cccccc]">
-                Mostrando <span className="font-semibold">{((pagination.page - 1) * pagination.limit) + 1}</span> a{' '}
-                <span className="font-semibold">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> de{' '}
-                <span className="font-semibold">{pagination.total}</span> registros
+                <span className="font-semibold">{((pagination.page - 1) * pagination.limit) + 1}</span>-<span className="font-semibold">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> de{' '}
+                <span className="font-semibold">{pagination.total}</span>
               </div>
 
               {/* Pagination buttons */}
-              <div className="flex items-center gap-4">
-                {/* Items per page */}
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 md:gap-4">
+                {/* Items per page - oculto no mobile */}
+                <div className="hidden md:flex items-center gap-2">
                   <label className="text-sm text-gray-600 dark:text-[#cccccc] whitespace-nowrap">Itens por página:</label>
                   <select
                     value={pagination.limit}
@@ -482,16 +481,16 @@ export default function LogsSystemList() {
                   </select>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 md:gap-2">
                   <button
                     onClick={() => handlePageChange(pagination.page - 1)}
                     disabled={pagination.page === 1}
                     className="px-3 py-2 rounded-lg border border-gray-300 bg-white dark:bg-[#333333] dark:border-[#444444] text-gray-700 dark:text-[#eeeeee] hover:bg-gray-50 dark:hover:bg-[#444444] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    <i className="fas fa-chevron-left"></i>
+                    <i className="fas fa-chevron-left text-sm"></i>
                   </button>
 
-                  {/* Page numbers */}
+                  {/* Page numbers - simplificado no mobile */}
                   <div className="flex gap-1">
                     {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => {
                       if (
@@ -503,7 +502,7 @@ export default function LogsSystemList() {
                           <button
                             key={page}
                             onClick={() => handlePageChange(page)}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                            className={`px-3 py-2 md:px-4 md:py-2 rounded-lg text-sm font-medium transition-colors ${
                               pagination.page === page
                                 ? 'bg-teal-600 text-white'
                                 : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-[#333333] dark:border-[#444444] dark:text-[#eeeeee] dark:hover:bg-[#444444]'
@@ -514,7 +513,7 @@ export default function LogsSystemList() {
                         )
                       } else if (page === pagination.page - 2 || page === pagination.page + 2) {
                         return (
-                          <span key={page} className="px-2 py-2 text-gray-500">
+                          <span key={page} className="px-1.5 md:px-2 py-2 text-gray-500 text-sm">
                             ...
                           </span>
                         )
@@ -528,7 +527,7 @@ export default function LogsSystemList() {
                     disabled={pagination.page === pagination.totalPages}
                     className="px-3 py-2 rounded-lg border border-gray-300 bg-white dark:bg-[#333333] dark:border-[#444444] text-gray-700 dark:text-[#eeeeee] hover:bg-gray-50 dark:hover:bg-[#444444] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    <i className="fas fa-chevron-right"></i>
+                    <i className="fas fa-chevron-right text-sm"></i>
                   </button>
                 </div>
               </div>
