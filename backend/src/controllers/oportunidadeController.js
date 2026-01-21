@@ -30,6 +30,9 @@ exports.getAllOportunidades = async (req, res) => {
 
     const params = [];
 
+    // Log para debug dos filtros recebidos
+    console.log('[Oportunidades] Filtros recebidos:', { numero, descricao, dataInicio, dataFim, status, page, limit });
+
     // Filtro por número da oportunidade
     if (numero) {
       query += ` AND opt_numero LIKE ?`;
@@ -43,15 +46,17 @@ exports.getAllOportunidades = async (req, res) => {
     }
 
     // Filtro por datas (cada campo filtra independentemente)
-    if (dataInicio) {
-      // Data Início filtra por opt_datainicio
-      query += ` AND DATE(opt_datainicio) = ?`;
-      params.push(dataInicio);
+    if (dataInicio && dataInicio.trim() !== '') {
+      // Data Início filtra por opt_datainicio - usar STR_TO_DATE para garantir formato
+      query += ` AND DATE(opt_datainicio) = STR_TO_DATE(?, '%Y-%m-%d')`;
+      params.push(dataInicio.trim());
+      console.log('[Oportunidades] Filtro dataInicio aplicado:', dataInicio);
     }
-    if (dataFim) {
-      // Data Fim filtra por opt_datafim
-      query += ` AND DATE(opt_datafim) = ?`;
-      params.push(dataFim);
+    if (dataFim && dataFim.trim() !== '') {
+      // Data Fim filtra por opt_datafim - usar STR_TO_DATE para garantir formato
+      query += ` AND DATE(opt_datafim) = STR_TO_DATE(?, '%Y-%m-%d')`;
+      params.push(dataFim.trim());
+      console.log('[Oportunidades] Filtro dataFim aplicado:', dataFim);
     }
 
     // Filtro por status (0 = Baixando, 1 = Completa)
@@ -86,13 +91,13 @@ exports.getAllOportunidades = async (req, res) => {
       countQuery += ` AND opt_descricao LIKE ?`;
       countParams.push(`%${descricao}%`);
     }
-    if (dataInicio) {
-      countQuery += ` AND DATE(opt_datainicio) = ?`;
-      countParams.push(dataInicio);
+    if (dataInicio && dataInicio.trim() !== '') {
+      countQuery += ` AND DATE(opt_datainicio) = STR_TO_DATE(?, '%Y-%m-%d')`;
+      countParams.push(dataInicio.trim());
     }
-    if (dataFim) {
-      countQuery += ` AND DATE(opt_datafim) = ?`;
-      countParams.push(dataFim);
+    if (dataFim && dataFim.trim() !== '') {
+      countQuery += ` AND DATE(opt_datafim) = STR_TO_DATE(?, '%Y-%m-%d')`;
+      countParams.push(dataFim.trim());
     }
     if (status !== undefined && status !== '') {
       countQuery += ` AND opt_status = ?`;
