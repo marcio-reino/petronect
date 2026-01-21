@@ -132,8 +132,11 @@ export default function OportunidadeList() {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '-'
-    const date = new Date(dateString)
-    return date.toLocaleDateString('pt-BR')
+    // Usar split para evitar problemas de timezone
+    // dateString vem como "2026-01-19" ou "2026-01-19T00:00:00.000Z"
+    const dateOnly = dateString.split('T')[0]
+    const [year, month, day] = dateOnly.split('-')
+    return `${day}/${month}/${year}`
   }
 
   const getStatusLabel = (status: number) => {
