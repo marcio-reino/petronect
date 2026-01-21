@@ -179,13 +179,21 @@ export default function OportunidadeList() {
   // Formatar data para o padrão DD.MM.YYYY HH:MM:SS
   const formatDateTxt = (dateString: string) => {
     if (!dateString) return '-'
-    const date = new Date(dateString)
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    const hours = String(date.getHours()).padStart(2, '0')
-    const minutes = String(date.getMinutes()).padStart(2, '0')
-    const seconds = String(date.getSeconds()).padStart(2, '0')
+    // Evitar problemas de timezone usando split
+    // dateString pode vir como "2026-01-19" ou "2026-01-19T10:30:00.000Z"
+    const hasTime = dateString.includes('T')
+    const [datePart, timePart] = dateString.split('T')
+    const [year, month, day] = datePart.split('-')
+
+    let hours = '00', minutes = '00', seconds = '00'
+    if (hasTime && timePart) {
+      const timeOnly = timePart.split('.')[0] // Remove milliseconds
+      const [h, m, s] = timeOnly.split(':')
+      hours = h || '00'
+      minutes = m || '00'
+      seconds = s || '00'
+    }
+
     return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`
   }
 
