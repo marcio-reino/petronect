@@ -45,12 +45,24 @@ export default function OportunidadeList() {
   const [oportunidades, setOportunidades] = useState<OportunidadeRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [pagination, setPagination] = useState<Pagination>({
-    page: 1,
-    limit: 10,
-    total: 0,
-    totalPages: 0
+  const [pagination, setPagination] = useState<Pagination>(() => {
+    if (typeof window !== 'undefined') {
+      const savedLimit = localStorage.getItem('oportunidades_items_per_page')
+      return {
+        page: 1,
+        limit: savedLimit ? parseInt(savedLimit, 10) : 10,
+        total: 0,
+        totalPages: 0
+      }
+    }
+    return {
+      page: 1,
+      limit: 10,
+      total: 0,
+      totalPages: 0
+    }
   })
+  const [showScrollTop, setShowScrollTop] = useState(false)
 
   // Filtros
   const [filtroNumero, setFiltroNumero] = useState('')
@@ -71,7 +83,7 @@ export default function OportunidadeList() {
   const [hasFiltered, setHasFiltered] = useState(false)
   const downloadCancelledRef = useRef(false)
 
-  const fetchOportunidades = async (page = 1) => {
+  const fetchOportunidades = async (page = 1, customLimit?: number) => {
     setLoading(true)
     setError(null)
     try {
@@ -79,7 +91,7 @@ export default function OportunidadeList() {
 
       const params = new URLSearchParams()
       params.append('page', page.toString())
-      params.append('limit', pagination.limit.toString())
+      params.append('limit', (customLimit ?? pagination.limit).toString())
 
       if (filtroNumero) params.append('numero', filtroNumero)
       if (filtroDescricao) params.append('descricao', filtroDescricao)
@@ -106,6 +118,19 @@ export default function OportunidadeList() {
     fetchOportunidades()
   }, [])
 
+  // Detectar scroll para mostrar/ocultar botão de voltar ao topo
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 300)
+    }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const handleSearch = () => {
     fetchOportunidades(1)
     setHasFiltered(true)
@@ -126,8 +151,9 @@ export default function OportunidadeList() {
   }
 
   const handleItemsPerPageChange = (value: number) => {
+    localStorage.setItem('oportunidades_items_per_page', value.toString())
     setPagination(prev => ({ ...prev, limit: value }))
-    setTimeout(() => fetchOportunidades(1), 0)
+    fetchOportunidades(1, value)
   }
 
   const formatDate = (dateString: string) => {
@@ -654,10 +680,9 @@ export default function OportunidadeList() {
                     onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
                     className="px-3 py-2 border border-gray-300 dark:border-[#444444] rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 dark:focus:ring-teal-600 bg-white dark:bg-[#333333] text-gray-700 dark:text-[#eeeeee]"
                   >
-                    <option value={5}>5</option>
                     <option value={10}>10</option>
-                    <option value={25}>25</option>
                     <option value={50}>50</option>
+                    <option value={100}>100</option>
                   </select>
                 </div>
 
@@ -798,6 +823,17 @@ export default function OportunidadeList() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Botão Voltar ao Topo */}
+      {showScrollTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-6 right-6 z-50 p-3 bg-teal-600 hover:bg-teal-700 text-white rounded-full shadow-lg transition-all duration-300 hover:scale-110"
+          title="Voltar ao topo"
+        >
+          <i className="fas fa-arrow-up"></i>
+        </button>
       )}
     </>
   )
