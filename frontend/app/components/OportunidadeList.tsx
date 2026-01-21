@@ -1,4 +1,4 @@
-'use client'
+'use client' 
 
 import { useEffect, useState, useRef } from 'react'
 import api from '@/config/api'

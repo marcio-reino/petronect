@@ -9,7 +9,7 @@ interface DatePickerProps {
   label?: string
   className?: string
 }
-
+ 
 export default function DatePicker({ value, onChange, placeholder = 'Selecione uma data', label, className = '' }: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [currentMonth, setCurrentMonth] = useState(new Date())

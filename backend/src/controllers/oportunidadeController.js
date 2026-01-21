@@ -1,6 +1,6 @@
 const { promisePool } = require('../config/database');
 const { logSystemActivity, getClientIp, getUserAgent } = require('../utils/logger');
-
+ 
 // Listar todas as oportunidades com filtros
 exports.getAllOportunidades = async (req, res) => {
   try {
