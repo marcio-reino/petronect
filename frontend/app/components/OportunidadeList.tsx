@@ -12,7 +12,9 @@ interface OportunidadeRow {
   opt_id: number
   opt_numero: string
   opt_datainicio: string
+  opt_horainicio: string
   opt_datafim: string
+  opt_horafim: string
   opt_descricao: string
   opt_totalitens: number
   opt_totalempresas: number
@@ -250,8 +252,8 @@ export default function OportunidadeList() {
       txt += '#####################################################################################\n'
       txt += `OPORTUNIDADE N:    ${op.opt_numero}\n`
       txt += `DESCRICAO:         ${op.opt_descricao || '-'}\n`
-      txt += `DATA INICIO:       ${formatDateTxt(op.opt_datainicio)}\n`
-      txt += `DATA FIM:          ${formatDateTxt(op.opt_datafim)}\n`
+      txt += `DATA INICIO:       ${formatDateTxt(op.opt_datainicio)} ${op.opt_horainicio || '00:00:00'}\n`
+      txt += `DATA FIM:          ${formatDateTxt(op.opt_datafim)} ${op.opt_horafim || '00:00:00'}\n`
       txt += `OPPORTUNITY TYPE:  Dispensa Item\n`
       txt += '#####################################################################################\n'
       txt += '---------------------------------------------------------------\n'
@@ -307,8 +309,8 @@ export default function OportunidadeList() {
     txt += '#####################################################################################\n'
     txt += `OPORTUNIDADE N:    ${op.opt_numero}\n`
     txt += `DESCRICAO:         ${op.opt_descricao || '-'}\n`
-    txt += `DATA INICIO:       ${formatDateTxt(op.opt_datainicio)}\n`
-    txt += `DATA FIM:          ${formatDateTxt(op.opt_datafim)}\n`
+    txt += `DATA INICIO:       ${formatDateTxt(op.opt_datainicio)} ${op.opt_horainicio || '00:00:00'}\n`
+    txt += `DATA FIM:          ${formatDateTxt(op.opt_datafim)} ${op.opt_horafim || '00:00:00'}\n`
     txt += `OPPORTUNITY TYPE:  Dispensa Item\n`
     txt += '#####################################################################################\n'
     txt += '---------------------------------------------------------------\n'
@@ -613,10 +615,12 @@ export default function OportunidadeList() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-[#dddddd] text-center">
-                      {formatDate(op.opt_datainicio)}
+                      <div>{formatDate(op.opt_datainicio)}</div>
+                      <div className="text-xs text-gray-400 dark:text-[#888888]">{op.opt_horainicio || '00:00:00'}</div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-[#dddddd] text-center">
-                      {formatDate(op.opt_datafim)}
+                      <div>{formatDate(op.opt_datafim)}</div>
+                      <div className="text-xs text-gray-400 dark:text-[#888888]">{op.opt_horafim || '00:00:00'}</div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-[#dddddd] text-center">
                       {op.opt_totalitens || 0}

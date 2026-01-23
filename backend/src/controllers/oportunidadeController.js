@@ -447,7 +447,9 @@ exports.syncOportunidade = async (req, res) => {
       numero,
       descricao,
       datainicio,
+      horainicio,
       datafim,
+      horafim,
       totalitens,
       bottag
     } = req.body;
@@ -469,8 +471,20 @@ exports.syncOportunidade = async (req, res) => {
       return dateStr;
     };
 
+    // Converter hora do formato HH:MM para HH:MM:SS
+    const parseTime = (timeStr) => {
+      if (!timeStr) return '00:00:00';
+      // Se já tem segundos, retorna como está
+      if (timeStr.match(/^\d{2}:\d{2}:\d{2}$/)) return timeStr;
+      // Se tem apenas HH:MM, adiciona :00
+      if (timeStr.match(/^\d{2}:\d{2}$/)) return `${timeStr}:00`;
+      return '00:00:00';
+    };
+
     const dataInicioFormatada = parseDate(datainicio);
     const dataFimFormatada = parseDate(datafim);
+    const horaInicioFormatada = parseTime(horainicio);
+    const horaFimFormatada = parseTime(horafim);
 
     // Verificar se a oportunidade já existe
     const [existing] = await promisePool.query(
@@ -485,17 +499,17 @@ exports.syncOportunidade = async (req, res) => {
       optId = existing[0].opt_id;
       await promisePool.query(`
         UPDATE tb_oportunidades
-        SET opt_descricao = ?, opt_datainicio = ?, opt_datafim = ?, opt_totalitens = ?, opt_status = 0
+        SET opt_descricao = ?, opt_datainicio = ?, opt_horainicio = ?, opt_datafim = ?, opt_horafim = ?, opt_totalitens = ?, opt_status = 0
         WHERE opt_id = ?
-      `, [descricao, dataInicioFormatada, dataFimFormatada, totalitens || 0, optId]);
+      `, [descricao, dataInicioFormatada, horaInicioFormatada, dataFimFormatada, horaFimFormatada, totalitens || 0, optId]);
 
       console.log(`[SyncOP] Oportunidade ${numero} atualizada (ID: ${optId})`);
     } else {
       // Criar nova oportunidade
       const [result] = await promisePool.query(`
-        INSERT INTO tb_oportunidades (opt_numero, opt_descricao, opt_datainicio, opt_datafim, opt_totalitens, opt_status)
-        VALUES (?, ?, ?, ?, ?, 0)
-      `, [numero, descricao, dataInicioFormatada, dataFimFormatada, totalitens || 0]);
+        INSERT INTO tb_oportunidades (opt_numero, opt_descricao, opt_datainicio, opt_horainicio, opt_datafim, opt_horafim, opt_totalitens, opt_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+      `, [numero, descricao, dataInicioFormatada, horaInicioFormatada, dataFimFormatada, horaFimFormatada, totalitens || 0]);
 
       optId = result.insertId;
       console.log(`[SyncOP] Oportunidade ${numero} criada (ID: ${optId})`);

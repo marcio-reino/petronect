@@ -326,7 +326,7 @@ async function waitForVerificationCode(maxWaitMs = 300000) {
 // FUNCOES DE SINCRONIZACAO COM BANCO DE DADOS
 // =============================================
 
-async function syncOportunidade(numero, descricao, datainicio, datafim, totalitens) {
+async function syncOportunidade(numero, descricao, datainicio, horainicio, datafim, horafim, totalitens) {
   try {
     const response = await fetch(`${API_BASE}/oportunidades/sync`, {
       method: 'POST',
@@ -335,7 +335,9 @@ async function syncOportunidade(numero, descricao, datainicio, datafim, totalite
         numero,
         descricao,
         datainicio,
+        horainicio,
         datafim,
+        horafim,
         totalitens,
         bottag
       })
@@ -970,7 +972,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
       await UpdateProcesso(n_op_processar, progress.lastItem || 0, qtd_itens, 'running');
 
       // Sincronizar oportunidade no banco de dados
-      await syncOportunidade(n_op_, desc_, data_inicio_, data_fim_, qtd_itens);
+      await syncOportunidade(n_op_, desc_, data_inicio_, hora_inicio_, data_fim_, hora_fim_, qtd_itens);
 
       // Processar itens - começando do próximo item pendente
       // A linha na tabela = item + 1 (linha 2 = item 1, linha 3 = item 2, etc)
