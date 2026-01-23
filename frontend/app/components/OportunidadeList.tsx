@@ -225,6 +225,14 @@ export default function OportunidadeList() {
     return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`
   }
 
+  // Formatar data para o padrão DD.MM.YYYY (sem hora)
+  const formatDateOnlyTxt = (dateString: string) => {
+    if (!dateString) return '-'
+    const [datePart] = dateString.split('T')
+    const [year, month, day] = datePart.split('-')
+    return `${day}.${month}.${year}`
+  }
+
   // Formatar quantidade com vírgula (ex: 1.000 -> 1,000)
   const formatQuantidade = (qtd: string) => {
     if (!qtd) return '0'
@@ -252,8 +260,8 @@ export default function OportunidadeList() {
       txt += '#####################################################################################\n'
       txt += `OPORTUNIDADE N:    ${op.opt_numero}\n`
       txt += `DESCRICAO:         ${op.opt_descricao || '-'}\n`
-      txt += `DATA INICIO:       ${formatDateTxt(op.opt_datainicio)} ${op.opt_horainicio || '00:00:00'}\n`
-      txt += `DATA FIM:          ${formatDateTxt(op.opt_datafim)} ${op.opt_horafim || '00:00:00'}\n`
+      txt += `DATA INICIO:       ${formatDateOnlyTxt(op.opt_datainicio)} ${op.opt_horainicio || '00:00:00'}\n`
+      txt += `DATA FIM:          ${formatDateOnlyTxt(op.opt_datafim)} ${op.opt_horafim || '00:00:00'}\n`
       txt += `OPPORTUNITY TYPE:  Dispensa Item\n`
       txt += '#####################################################################################\n'
       txt += '---------------------------------------------------------------\n'
@@ -309,8 +317,8 @@ export default function OportunidadeList() {
     txt += '#####################################################################################\n'
     txt += `OPORTUNIDADE N:    ${op.opt_numero}\n`
     txt += `DESCRICAO:         ${op.opt_descricao || '-'}\n`
-    txt += `DATA INICIO:       ${formatDateTxt(op.opt_datainicio)} ${op.opt_horainicio || '00:00:00'}\n`
-    txt += `DATA FIM:          ${formatDateTxt(op.opt_datafim)} ${op.opt_horafim || '00:00:00'}\n`
+    txt += `DATA INICIO:       ${formatDateOnlyTxt(op.opt_datainicio)} ${op.opt_horainicio || '00:00:00'}\n`
+    txt += `DATA FIM:          ${formatDateOnlyTxt(op.opt_datafim)} ${op.opt_horafim || '00:00:00'}\n`
     txt += `OPPORTUNITY TYPE:  Dispensa Item\n`
     txt += '#####################################################################################\n'
     txt += '---------------------------------------------------------------\n'
