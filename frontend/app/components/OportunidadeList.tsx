@@ -236,7 +236,10 @@ export default function OportunidadeList() {
   // Formatar quantidade com vírgula (ex: 1.000 -> 1,000)
   const formatQuantidade = (qtd: string) => {
     if (!qtd) return '0'
-    const num = parseFloat(qtd)
+    // Converter formato BR (1.000,500) para formato JS (1000.500) antes do parseFloat
+    const normalized = qtd.replace(/\./g, '').replace(',', '.')
+    const num = parseFloat(normalized)
+    if (isNaN(num)) return qtd
     return num.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
   }
 
@@ -252,8 +255,14 @@ export default function OportunidadeList() {
       }
 
       const itens: OportunidadeItem[] = res.data.data
-      const now = new Date()
-      const processadoEm = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()} - ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+
+      // Pegar data de resgate do último item da proposta
+      const ultimoItem = itens.length > 0 ? itens[itens.length - 1] : null
+      let processadoEm = '-'
+      if (ultimoItem?.optitem_dataresgate) {
+        const dt = new Date(ultimoItem.optitem_dataresgate)
+        processadoEm = `${String(dt.getDate()).padStart(2, '0')}.${String(dt.getMonth() + 1).padStart(2, '0')}.${dt.getFullYear()} - ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}:${String(dt.getSeconds()).padStart(2, '0')}`
+      }
 
       // Montar conteúdo do TXT
       let txt = ''
@@ -310,8 +319,14 @@ export default function OportunidadeList() {
     }
 
     const itens: OportunidadeItem[] = res.data.data
-    const now = new Date()
-    const processadoEm = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()} - ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+
+    // Pegar data de resgate do último item da proposta
+    const ultimoItem = itens.length > 0 ? itens[itens.length - 1] : null
+    let processadoEm = '-'
+    if (ultimoItem?.optitem_dataresgate) {
+      const dt = new Date(ultimoItem.optitem_dataresgate)
+      processadoEm = `${String(dt.getDate()).padStart(2, '0')}.${String(dt.getMonth() + 1).padStart(2, '0')}.${dt.getFullYear()} - ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}:${String(dt.getSeconds()).padStart(2, '0')}`
+    }
 
     let txt = ''
     txt += '#####################################################################################\n'
